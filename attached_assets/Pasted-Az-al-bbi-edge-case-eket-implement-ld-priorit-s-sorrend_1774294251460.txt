@@ -1,0 +1,259 @@
+Az alábbi edge case-eket implementáld prioritás sorrendben.
+Az 1-es prioritás életveszélyes helyzeteket javít, ezeket mindenképpen csináld meg.
+A 2-es és 3-as prioritás komfort és megbízhatóság.
+
+PRIORITÁS 1 – ÉLETVESZÉLYES EDGE CASE-EK
+A) Telefon leesés vs valódi baleset megkülönböztetése
+javascript// A jelenlegi detekció csak G-erőt néz.
+// Add hozzá ezt a logikát MINDEN baleset triggerhez:
+
+function isPhoneDrop(sensorData) {
+  const { gForce, speedKmh, speedChangeMs } = sensorData;
+  
+  // Ha a GPS szerint a motoros még mozog hasonló sebességen
+  // de a telefon G-ereje magas → telefon esett le, nem baleset
+  if (gForce > 3.0 && speedChangeMs < 5 && speedKmh > 10) {
+    return true; // false positive – telefon leesett
+  }
+  return false;
+}
+
+// Módosítsd az accident detection logikát:
+if (isPhoneDrop(sensorData)) {
+  console.log('Phone drop detected – ignoring');
+  return; // ne triggerelj semmit
+}
+B) Sebesség = 0 esetén ne induljon vészjelzés
+javascript// Motor parkolóban ledől – senki sincs rajta
+function shouldIgnoreAccident(speed, duration) {
+  // Ha 5 másodpercnél régebben áll a motor → nem baleset
+  if (speed < 2 && duration > 5000) {
+    return true;
+  }
+  return false;
+}
+C) Low battery előrejelző SMS
+javascriptimport * as Battery from 'expo-battery';
+
+// Figyelj az akkumulátor szintre menet közben:
+Battery.addBatteryLevelListener(({ batteryLevel }) => {
+  const percent = Math.round(batteryLevel * 100);
+  
+  // Ha 15% alá esik menet közben:
+  if (percent <= 15 && isRiding && !lowBatteryAlertSent) {
+    const location = await getCurrentLocation();
+    const msg = buildLowBatteryAlert(riderName, location, percent);
+    
+    // SMS küldés a kontaktoknak:
+    sendEmergencySMS(emergencyContacts, msg);
+    setLowBatteryAlertSent(true);
+    
+    // Voice Agent figyelmeztetés:
+    speak("Warning: battery at " + percent + " percent. Emergency contacts notified of your location.");
+  }
+  
+  // Reset ha töltőre tette:
+  if (percent > 20) setLowBatteryAlertSent(false);
+});
+
+function buildLowBatteryAlert(name, location, percent) {
+  const mapsLink = `https://maps.google.com/?q=${location.lat},${location.lon}`;
+  return `⚡ MOTOGUARD LOW BATTERY ALERT
+Rider: ${name}
+Battery: ${percent}% – phone may go offline soon
+Last known location: ${mapsLink}
+Time: ${new Date().toLocaleString()}
+This is an automated safety alert from MotoGuard.`;
+}
+D) Külföldi segélyhívó automatikus felismerése
+javascript// Ország alapján helyes segélyhívó szám:
+const EMERGENCY_NUMBERS = {
+  HU: '112', AT: '112', DE: '112', FR: '112',
+  IT: '112', ES: '112', PT: '112', RO: '112',
+  GB: '999', US: '911', CA: '911', AU: '000',
+  JP: '119', default: '112'
+};
+
+async function getLocalEmergencyNumber() {
+  try {
+    const location = await getCurrentLocation();
+    const country = await reverseGeocodeCountry(location);
+    return EMERGENCY_NUMBERS[country] || EMERGENCY_NUMBERS.default;
+  } catch {
+    return EMERGENCY_NUMBERS.default;
+  }
+}
+
+// Használat az emergency call előtt:
+const emergencyNumber = await getLocalEmergencyNumber();
+Linking.openURL(`tel:${emergencyNumber}`);
+
+// Voice Agent is mondja ki:
+speak(`Calling emergency services: ${emergencyNumber}`);
+E) Baleset cancellelése fizikai gombokkal
+javascript// Ha a képernyő törött de a motoros jól van,
+// hangerő gombokkal is lehessen cancellelni:
+import { useVolumeButtons } from './hooks/useVolumeButtons';
+
+// A countdown során:
+useVolumeButtons({
+  onVolumeUp: () => {
+    if (isCountdownActive) {
+      cancelEmergencyAlert();
+      speak("Alert cancelled");
+    }
+  },
+  onVolumeDown: () => {
+    if (isCountdownActive) {
+      cancelEmergencyAlert();
+      speak("Alert cancelled");
+    }
+  }
+});
+
+// Mutasd a UI-on is:
+<Text style={styles.hint}>
+  Press volume buttons to cancel
+</Text>
+
+PRIORITÁS 2 – NAVIGÁCIÓ ÉS VOICE AGENT STABILIZÁLÁS
+F) Navigáció automatikus leállítása balesetnél
+javascript// Az accident detection callback-ben:
+onAccidentDetected: (level) => {
+  // Navigáció leállítása
+  if (isNavigating) {
+    stopNavigation();
+    speak("Navigation paused. Are you OK?");
+  }
+  
+  // Ne mondjon navigációs utasítást baleset közben
+  setNavigationPaused(true);
+  
+  // Ha a motoros OK-t nyom → navigáció folytatódik
+  onRiderOK: () => {
+    setNavigationPaused(false);
+    speak("Navigation resumed");
+  }
+}
+G) TTS közben mikrofon felfüggesztés
+javascript// Jelenleg a Voice Agent a saját hangját is hallhatja.
+// Az expo-speech onStart/onDone callback-ekkel:
+
+import * as Speech from 'expo-speech';
+
+function speakAndPauseMic(text) {
+  // Mikrofon kikapcsolása TTS előtt:
+  pauseVoiceAgentListening();
+  
+  Speech.speak(text, {
+    onStart: () => pauseVoiceAgentListening(),
+    onDone: () => {
+      // 500ms késleltetés hogy a visszhang elhaljon:
+      setTimeout(() => resumeVoiceAgentListening(), 500);
+    },
+    onError: () => resumeVoiceAgentListening(),
+  });
+}
+
+// Minden speak() hívást cseréld speakAndPauseMic()-re
+H) Idle detection – tankolás, pihenő automatikus felismerése
+javascript// Ha a motoros 3+ percig áll menet közben:
+const IDLE_THRESHOLD_MS = 3 * 60 * 1000; // 3 perc
+
+useEffect(() => {
+  let idleTimer;
+  
+  if (isRiding && currentSpeed < 2) {
+    idleTimer = setTimeout(() => {
+      setRideStatus('paused');
+      speak("Ride paused. Tap to resume when ready.");
+      
+      // Ride timer megáll, track rögzítés szünetel
+      pauseRideTracking();
+    }, IDLE_THRESHOLD_MS);
+  } else if (currentSpeed >= 2) {
+    clearTimeout(idleTimer);
+    
+    if (rideStatus === 'paused') {
+      setRideStatus('active');
+      resumeRideTracking();
+      speak("Ride resumed");
+    }
+  }
+  
+  return () => clearTimeout(idleTimer);
+}, [currentSpeed, isRiding]);
+
+PRIORITÁS 3 – KOMFORT FEJLESZTÉSEK
+I) GPS elvesztés kezelése alagútban
+javascript// Ha GPS signal elvész (pontosság > 50m vagy nincs fix):
+function handleGPSLoss(lastKnownLocation, lastSpeed, lastHeading) {
+  setGpsStatus('lost');
+  
+  // Dead reckoning: becsüljük a pozíciót sebesség + irány alapján
+  const estimatedPosition = estimatePositionByDeadReckoning(
+    lastKnownLocation,
+    lastSpeed,
+    lastHeading,
+    timeSinceLastFix
+  );
+  
+  // Térképen jelezd hogy becslés:
+  setPositionAccuracy('estimated');
+  updateMapPosition(estimatedPosition);
+  
+  // 30 másodperc után figyelmeztetés:
+  if (timeSinceLastFix > 30000) {
+    speak("GPS signal lost. Navigation may be inaccurate.");
+  }
+}
+
+function estimatePositionByDeadReckoning(pos, speedMs, headingDeg, elapsedMs) {
+  const distanceM = speedMs * (elapsedMs / 1000);
+  const headingRad = headingDeg * Math.PI / 180;
+  
+  const deltaLat = (distanceM * Math.cos(headingRad)) / 111320;
+  const deltaLon = (distanceM * Math.sin(headingRad)) / 
+    (111320 * Math.cos(pos.latitude * Math.PI / 180));
+  
+  return {
+    latitude: pos.latitude + deltaLat,
+    longitude: pos.longitude + deltaLon,
+    isEstimated: true
+  };
+}
+J) Fekvőrendőr / útgödör false positive szűrése
+javascript// Fekvőrendőr jellemzői:
+// - Hirtelen G-erő spike (< 0.3 másodperc)
+// - Utána azonnal visszaáll normálra
+// - Sebesség nem csökkent jelentősen
+// - Ismétlődik (ha az úton több van)
+
+function isSpeedBump(accelerationHistory) {
+  const spike = accelerationHistory.slice(-5); // utolsó 500ms
+  const duration = spike.filter(a => a > 2.0).length;
+  
+  // Ha a spike rövid (< 300ms) és a sebesség folytatódott:
+  if (duration <= 3 && currentSpeed > lastSpeed * 0.8) {
+    return true; // valószínűleg fekvőrendőr
+  }
+  return false;
+}
+
+// Az accident detection-ben:
+if (isSpeedBump(recentAcceleration)) {
+  console.log('Speed bump detected – ignoring');
+  return;
+}
+
+ELLENŐRZÉS FEJLESZTÉS UTÁN
+[ ] Telefon leesés (dobja le az asztalra) → NEM indul vészjelzés
+[ ] Álló motoron ledőlés → NEM indul vészjelzés  
+[ ] 15% akku → SMS kimegy a kontaktoknak automatikusan
+[ ] Külföldi GPS pozíció → helyes segélyhívó szám jelenik meg
+[ ] Hangerő gombokkal lehet cancellelni a countdownt
+[ ] TTS közben a Voice Agent nem hallja saját magát
+[ ] 3 perc állás → Ride automatikusan szüneteltetésre kerül
+[ ] Baleset detektálásnál navigáció szünetel
+[ ] GPS elvesztésnél a térkép jelzi hogy becslés az adat
+[ ] Fekvőrendőr áthajtásnál NEM indul false positive

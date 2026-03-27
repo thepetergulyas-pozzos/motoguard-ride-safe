@@ -1,0 +1,85 @@
+{
+  "expo": {
+    "name": "MotoGuard",
+    "slug": "motoguard",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#0A0E1A",
+    "primaryColor": "#E8701A",
+    "icon": "./assets/images/icon.png",
+    "scheme": "motoguard",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0E1A"
+    },
+    "ios": {
+      "bundleIdentifier": "com.motoguard.app",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "requireFullScreen": true,
+      "infoPlist": {
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "MotoGuard needs your location for accident detection and ride tracking.",
+        "NSLocationWhenInUseUsageDescription": "MotoGuard needs your location to track your ride and detect accidents.",
+        "NSMotionUsageDescription": "MotoGuard uses motion sensors to detect accidents while riding.",
+        "NSMicrophoneUsageDescription": "MotoGuard uses the microphone for hands-free voice commands while riding.",
+        "NSSpeechRecognitionUsageDescription": "MotoGuard uses speech recognition for the voice assistant.",
+        "NSBluetoothAlwaysUsageDescription": "MotoGuard connects to your Bluetooth helmet headset for audio.",
+        "UIBackgroundModes": ["location", "audio", "fetch"],
+        "GMSApiKey": "GOOGLE_MAPS_API_KEY_PLACEHOLDER"
+      }
+    },
+    "android": {
+      "package": "com.motoguard.app",
+      "versionCode": 1,
+      "config": {
+        "googleMaps": {
+          "apiKey": "GOOGLE_MAPS_API_KEY_PLACEHOLDER"
+        }
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "RECORD_AUDIO",
+        "SEND_SMS",
+        "CALL_PHONE",
+        "BLUETOOTH",
+        "BLUETOOTH_CONNECT",
+        "VIBRATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      "expo-location",
+      "expo-sensors",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#E8701A"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+      }
+    }
+  }
+}

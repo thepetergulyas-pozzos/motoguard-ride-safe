@@ -1,0 +1,423 @@
+Tegyük App Store ready állapotba a MotoGuard Expo appot.
+Menj végig minden ponton sorban, ne hagyj ki semmit.
+
+1. APP KONFIGURÁCIÓ (app.json / app.config.js)
+Frissítsd az app.json-t ezekre a pontos értékekre:
+json{
+  "expo": {
+    "name": "MotoGuard",
+    "slug": "motoguard",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#0A0E1A",
+    "primaryColor": "#E8701A",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0E1A"
+    },
+    "ios": {
+      "bundleIdentifier": "com.motoguard.app",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "requireFullScreen": true,
+      "infoPlist": {
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "MotoGuard needs your location for accident detection and ride tracking.",
+        "NSLocationWhenInUseUsageDescription": "MotoGuard needs your location to track your ride and detect accidents.",
+        "NSMotionUsageDescription": "MotoGuard uses motion sensors to detect accidents while riding.",
+        "NSMicrophoneUsageDescription": "MotoGuard uses the microphone for hands-free voice commands while riding.",
+        "NSSpeechRecognitionUsageDescription": "MotoGuard uses speech recognition for the voice assistant.",
+        "NSBluetoothAlwaysUsageDescription": "MotoGuard connects to your Bluetooth helmet headset for audio.",
+        "UIBackgroundModes": ["location", "audio", "fetch"]
+      }
+    },
+    "android": {
+      "package": "com.motoguard.app",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "RECORD_AUDIO",
+        "SEND_SMS",
+        "CALL_PHONE",
+        "BLUETOOTH",
+        "BLUETOOTH_CONNECT",
+        "VIBRATE"
+      ]
+    },
+    "plugins": [
+      "expo-location",
+      "expo-sensors",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#E8701A"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+      }
+    }
+  }
+}
+
+2. APP IKON ÉS SPLASH SCREEN
+Hozd létre a következő képeket programmatikusan (Canvas API vagy SVG → PNG):
+icon.png (1024×1024)
+
+Sötét háttér: #0A0E1A
+Középen: motoros sisak körvonala VAGY pajzs ikon
+Narancssárga akcentus: #E8701A
+Tiszta, egyszerű design – App Store irányvonalak szerint
+
+splash.png (1284×2778 – iPhone 14 Pro Max méret)
+
+Sötét háttér: #0A0E1A
+Középen: MotoGuard logó + szöveg
+"Protecting riders worldwide" felirat
+Narancssárga részletek
+
+notification-icon.png (96×96)
+
+Fehér pajzs ikon, átlátszó háttér
+
+Ha nem tudsz képet generálni, hozz létre placeholder PNG fájlokat
+a megfelelő méretekben és tájékoztass melyeket kell kézzel cserélni.
+
+3. HIÁNYZÓ EXPO CSOMAGOK
+Ellenőrizd hogy ezek mind telepítve vannak (package.json-ban):
+bashexpo install \
+  expo-location \
+  expo-sensors \
+  expo-sms \
+  expo-notifications \
+  expo-haptics \
+  expo-keep-awake \
+  expo-brightness \
+  @react-native-async-storage/async-storage \
+  react-native-purchases
+react-native-purchases = RevenueCat SDK (előfizetések)
+
+4. VALÓDI SZENZOR INTEGRÁCIÓ
+Cseréld le az összes mock/szimulált szenzor adatot valódi Expo sensor API-ra:
+Accelerometer (balesetdetekció):
+javascriptimport { Accelerometer } from 'expo-sensors';
+
+// 10Hz frissítési ráta (100ms)
+Accelerometer.setUpdateInterval(100);
+
+const subscription = Accelerometer.addListener(({ x, y, z }) => {
+  const gForce = Math.sqrt(x*x + y*y + z*z);
+  
+  // MAIDS standard küszöbértékek:
+  if (gForce > 3.0) triggerWarning(gForce);
+  if (gForce > 4.5) triggerAlert(gForce);
+  if (gForce > 6.0) triggerEmergency(gForce);
+});
+GPS (ride tracking):
+javascriptimport * as Location from 'expo-location';
+
+// Háttér location engedély kérése:
+const { status } = await Location.requestBackgroundPermissionsAsync();
+
+// Folyamatos GPS tracking:
+await Location.watchPositionAsync(
+  {
+    accuracy: Location.Accuracy.BestForNavigation,
+    timeInterval: 1000,
+    distanceInterval: 5,
+  },
+  (location) => {
+    const { latitude, longitude, speed, heading } = location.coords;
+    updateRideData({ latitude, longitude, speedKmh: speed * 3.6, heading });
+  }
+);
+Gyroscope (forgás detektálás):
+javascriptimport { Gyroscope } from 'expo-sensors';
+
+Gyroscope.setUpdateInterval(100);
+Gyroscope.addListener(({ x, y, z }) => {
+  const rotation = Math.sqrt(x*x + y*y + z*z);
+  if (rotation > 5.0) increaseAccidentRisk();
+});
+
+5. SMS KÜLDÉS (valódi)
+javascriptimport * as SMS from 'expo-sms';
+
+async function sendEmergencySMS(contacts, message) {
+  const isAvailable = await SMS.isAvailableAsync();
+  
+  if (isAvailable) {
+    await SMS.sendSMSAsync(
+      contacts.map(c => c.phone),
+      message
+    );
+  } else {
+    // Fallback: Linking.openURL('sms:...')
+    const phoneNumbers = contacts.map(c => c.phone).join(',');
+    await Linking.openURL(`sms:${phoneNumbers}?body=${encodeURIComponent(message)}`);
+  }
+}
+
+// SMS szöveg formátum:
+function buildEmergencySMS(riderName, lat, lon, level) {
+  const mapsLink = `https://maps.google.com/?q=${lat},${lon}`;
+  return `🚨 MOTOGUARD EMERGENCY ALERT
+Rider: ${riderName}
+Level: ${level}
+Location: ${mapsLink}
+Coordinates: ${lat.toFixed(5)}, ${lon.toFixed(5)}
+Time: ${new Date().toLocaleString()}
+Sent by MotoGuard Safety App`;
+}
+
+6. VÉSZJELZÉS PROTOKOLL (3 szint)
+Implementáld a teljes accident detection flow-t:
+javascript// 1. szint – WARNING (sárga)
+async function triggerWarning(gForce, speed) {
+  await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  showWarningOverlay({
+    countdown: 15,
+    message: "Are you OK?",
+    onConfirm: () => dismissAlert(),
+    onTimeout: () => triggerAlert(gForce, speed)
+  });
+}
+
+// 2. szint – ALERT (piros)  
+async function triggerAlert(gForce, speed) {
+  await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+  showAlertOverlay({
+    countdown: 30,
+    message: "Accident detected! Cancel or help will be called.",
+    onConfirm: () => dismissAlert(),
+    onTimeout: () => triggerEmergency(gForce, speed)
+  });
+}
+
+// 3. szint – EMERGENCY (automatikus SMS)
+async function triggerEmergency(gForce, speed) {
+  const location = await Location.getCurrentPositionAsync({});
+  const { latitude, longitude } = location.coords;
+  
+  // SMS automatikusan (user approval nem kell 3. szintnél)
+  const contacts = getEmergencyContacts();
+  const sms = buildEmergencySMS(getRiderName(), latitude, longitude, "EMERGENCY");
+  await sendEmergencySMS(contacts, sms);
+  
+  // 112 hívás – Linking (user interaction kell iOS-en)
+  showEmergencyCallPrompt({
+    script: `This is an automated alert. Rider ${getRiderName()} may have had an accident at ${latitude}, ${longitude}.`,
+    onCall: () => Linking.openURL('tel:112')
+  });
+}
+
+7. ELŐFIZETÉSI RENDSZER (RevenueCat)
+javascriptimport Purchases from 'react-native-purchases';
+
+// Inicializálás (App.js-ben):
+await Purchases.configure({
+  apiKey: Platform.OS === 'ios' 
+    ? 'appl_XXXX'   // ← RevenueCat iOS kulcs
+    : 'goog_XXXX'   // ← RevenueCat Android kulcs
+});
+
+// Csomag definíciók (RevenueCat dashboard-on is beállítandó):
+// - com.motoguard.basic.monthly    $2.99
+// - com.motoguard.pro.monthly      $5.99
+// - com.motoguard.prodrone.monthly $12.99
+
+// Vásárlás:
+async function purchasePlan(packageId) {
+  try {
+    const offerings = await Purchases.getOfferings();
+    const pkg = offerings.current.availablePackages
+      .find(p => p.product.identifier === packageId);
+    
+    const { customerInfo } = await Purchases.purchasePackage(pkg);
+    return customerInfo.entitlements.active;
+  } catch (e) {
+    if (!e.userCancelled) console.error(e);
+  }
+}
+
+// Entitlement check:
+async function checkSubscription() {
+  const info = await Purchases.getCustomerInfo();
+  if (info.entitlements.active['pro_drone']) return 'pro_drone';
+  if (info.entitlements.active['pro']) return 'pro';
+  if (info.entitlements.active['basic']) return 'basic';
+  return 'free';
+}
+
+8. HÁTTÉR FUTTATÁS (Keep Awake + Background Task)
+javascriptimport { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import * as TaskManager from 'expo-task-manager';
+import * as BackgroundFetch from 'expo-background-fetch';
+
+const BACKGROUND_ACCIDENT_TASK = 'background-accident-detection';
+
+// Háttér task regisztrálás:
+TaskManager.defineTask(BACKGROUND_ACCIDENT_TASK, async () => {
+  // Accelerometer polling háttérben
+  return BackgroundFetch.BackgroundFetchResult.NewData;
+});
+
+// Menet indításkor:
+async function startRide() {
+  await activateKeepAwakeAsync();
+  await BackgroundFetch.registerTaskAsync(BACKGROUND_ACCIDENT_TASK, {
+    minimumInterval: 1, // 1 másodperc
+    stopOnTerminate: false,
+    startOnBoot: false,
+  });
+}
+
+// Menet leállításkor:
+async function stopRide() {
+  deactivateKeepAwake();
+  await BackgroundFetch.unregisterTaskAsync(BACKGROUND_ACCIDENT_TASK);
+}
+
+9. PRIVACY MANIFEST (iOS 17+ kötelező)
+Hozd létre: ios/PrivacyInfo.xcprivacy
+xml<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "...">
+<plist version="1.0">
+<dict>
+  <key>NSPrivacyAccessedAPITypes</key>
+  <array>
+    <dict>
+      <key>NSPrivacyAccessedAPIType</key>
+      <string>NSPrivacyAccessedAPICategoryLocation</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array>
+        <string>CA92.1</string>
+      </array>
+    </dict>
+    <dict>
+      <key>NSPrivacyAccessedAPIType</key>
+      <string>NSPrivacyAccessedAPICategoryMotion</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array>
+        <string>C617.1</string>
+      </array>
+    </dict>
+  </array>
+  <key>NSPrivacyCollectedDataTypes</key>
+  <array/>
+  <key>NSPrivacyTracking</key>
+  <false/>
+</dict>
+</plist>
+
+10. EAS BUILD KONFIGURÁCIÓ
+Hozd létre: eas.json
+json{
+  "cli": {
+    "version": ">= 5.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "ios": {
+        "credentialsSource": "remote"
+      },
+      "android": {
+        "buildType": "app-bundle",
+        "credentialsSource": "remote"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "REPLACE_WITH_APPLE_ID_EMAIL",
+        "ascAppId": "REPLACE_WITH_APP_STORE_CONNECT_APP_ID",
+        "appleTeamId": "REPLACE_WITH_TEAM_ID"
+      }
+    }
+  }
+}
+
+11. APP STORE LEÍRÁS (beépítve az appba)
+Hozd létre: constants/AppStoreMetadata.js
+javascriptexport const APP_STORE_METADATA = {
+  name: "MotoGuard – Ride Safe",
+  subtitle: "Accident Detection & Voice AI",
+  keywords: "motorcycle,safety,crash,accident,detection,ride,motorbike,biker,emergency,sos",
+  
+  descriptionEN: `MotoGuard is the world's most advanced motorcycle safety app.
+
+🛡️ ACCIDENT DETECTION
+Using the MAIDS standard (Motorcycle Accident In-Depth Study), MotoGuard monitors your ride with 3 levels of protection. If an accident is detected, your emergency contacts are notified instantly with your GPS location.
+
+🎙️ VOICE AI AGENT
+Hands-free AI assistant responds to your voice while riding. Ask about speed, weather, navigation – without touching your phone.
+
+📍 RIDE TRACKING
+Every ride is automatically recorded with speed, distance, and route. Export as GPX or CSV.
+
+🌍 6 LANGUAGES
+English, Hungarian, German, Spanish, Italian, Portuguese.
+
+🔒 FULLY PRIVATE
+All AI runs on your device. No audio or data sent to any server.
+
+PLANS:
+- Free – Basic accident detection
+- Basic $2.99/mo – Emergency contacts + 112 call
+- Pro $5.99/mo – Voice AI + 6 languages + unlimited rides
+- Pro+Drone $12.99/mo – DJI drone integration`,
+
+  privacyPolicyUrl: "https://motoguard.app/privacy",
+  supportUrl: "https://motoguard.app/support",
+  
+  appReviewNotes: `Safety app for motorcyclists using MAIDS standard accident detection.
+
+Background location: required for continuous accident monitoring during rides.
+
+Emergency call: triggered only after user voice confirmation OR when rider is completely unresponsive after a 30-second countdown. Never called automatically without user interaction on iOS.
+
+Microphone: used exclusively for on-device speech recognition. No audio leaves the device.
+
+Test crash detection: shake device vigorously for 2 seconds while on Dashboard screen.`
+};
+
+12. ELLENŐRZŐ LISTA – MIELŐTT KÉSZ
+Futtasd végig és javítsd ami piros:
+[ ] app.json – bundle ID, verzió, összes permission megvan
+[ ] App ikon – 1024x1024 PNG, nincs átlátszóság, nincs sarkos lekerekítés
+[ ] Splash screen – helyes méret, sötét háttér
+[ ] Valódi accelerometer – nem mock adat
+[ ] Valódi GPS – Location.watchPositionAsync
+[ ] SMS küldés – expo-sms telepítve és működik
+[ ] RevenueCat – react-native-purchases telepítve
+[ ] eas.json – létezik
+[ ] Privacy manifest – létezik (iOS 17+)
+[ ] Nincs console.log az éles kódban
+[ ] Nincs hardcoded API kulcs a kódban
+[ ] Minden képernyő Dark Mode-ban is jól néz ki
+[ ] Minden képernyő iPhone SE méretben is működik (4.7")
+
+13. VÉGÉN MONDD MEG:
+
+Melyik fájlokat nem tudtad létrehozni (pl. PNG képek)
+Melyik package telepítése volt sikertelen
+Van-e bármilyen TypeScript/JS hiba
+Pontosan milyen fájlok léteznek most a projektben

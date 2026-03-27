@@ -1,0 +1,454 @@
+Te egy senior iOS fejlesztő vagy, aki egy production-ready App Store appot épít.
+A projekt neve: MotoGuard – motoros biztonsági ökoszisztéma.
+
+1. MIT KAPSZ (már meglévő kód)
+50 Swift fájl, 10 sprint munkája. A mappában megtalálod az összes forrást.
+Futtasd először ezt hogy lásd mi van:
+bashfind . -name "*.swift" | sort
+ls -la
+A projekt felépítése:
+App/           → MotoGuardApp.swift, AppEnvironment (DI konténer)
+Onboarding/    → 6 lépéses onboarding, 6 nyelv
+Models/        → AppSettings, LocalizedStrings
+Sensors/       → SensorFusionEngine (CoreMotion 10Hz), AccidentDetectionEngine
+VoiceAgent/    → WhisperKit STT, Llama 3.2 LLM, TTS pipeline
+Emergency/     → SMS (2 kontakt), 112 CallKit
+Bluetooth/     → HFP/A2DP sisakhallgató
+Drone/         → MAVLink, FOLLOW/ARC/GPS Recovery
+Map/           → Google Maps wrapper
+RideLog/       → Menet napló, GPX/CSV export
+Subscription/  → RevenueCat, 4 tier, PaywallView
+UI/            → 4 tab UI, Dashboard, Emergency overlay
+A 4 előfizetési csomag:
+
+Free – balesetdetekció alap, 1 SMS kontakt, 5 menet tárolás
+Basic ($2.99/hó) – 2 kontakt, 112 CallKit, 30 menet
+Pro ($5.99/hó) – Voice Agent, 6 nyelv, korlátlan log, GPX export
+Pro+Drone ($12.99/hó) – DJI FPV drón integráció
+
+
+2. CÉLJA ENNEK A SESSIONNEK
+App Store Ready állapot – az alábbi sorrendben haladj:
+
+Xcode projekt struktúra létrehozása és buildelhetővé tétele
+Minden fordítási hiba javítása (ERROR: 0 a cél)
+Dependency-k (SPM + CocoaPods) telepítése
+Stub kódok cseréje valódi implementációra
+Feature flags bekötése az előfizetési rendszerbe
+Unit tesztek – minden passed
+App Store anyagok (Privacy Policy, leírások, metaadatok)
+Archive + feltöltés előkészítése
+
+
+3. PROJEKT KONFIGURÁCIÓ
+Ezeket az értékeket használd mindenhol:
+Bundle ID:          com.motoguard.app
+App Name:           MotoGuard – Ride Safe
+Version:            1.0.0
+Build:              1
+iOS Target:         17.0
+Min Device:         iPhone 12 (Neural Engine kell a Voice Agenthez)
+Swift:              5.9+
+Xcode:              15+
+API kulcsok helye (ezeket én adom meg ha kész az alap build):
+Google Maps:   Info.plist → GMSApiKey
+RevenueCat:    AppEnvironment.swift → SubscriptionManager.configure(apiKey:)
+
+4. FÁZIS 1 – XCODE PROJEKT LÉTREHOZÁS
+4.1 Ellenőrizd a környezetet
+bashxcode-select --version
+xcodebuild -version
+pod --version       # CocoaPods
+swift --version
+Ha valami hiányzik:
+bash# CocoaPods ha nincs:
+sudo gem install cocoapods
+
+# Node ha kell:
+brew install node
+4.2 Hozd létre a Xcode projekt struktúrát
+Nézd meg a meglévő Swift fájlokat, majd:
+a) Package.swift (Swift Package Manager entry point):
+swift// swift-tools-version: 5.9
+import PackageDescription
+
+let package = Package(
+    name: "MotoGuard",
+    platforms: [.iOS(.v17)],
+    targets: [
+        .target(
+            name: "MotoGuard",
+            path: "MotoGuard"
+        ),
+        .testTarget(
+            name: "MotoGuardTests",
+            dependencies: ["MotoGuard"],
+            path: "MotoGuardTests"
+        )
+    ]
+)
+b) Podfile (Google Maps):
+rubyplatform :ios, '17.0'
+use_frameworks!
+
+target 'MotoGuard' do
+  pod 'GoogleMaps',   '~> 8.0'
+  pod 'GooglePlaces', '~> 8.0'
+end
+Futtasd: pod install
+c) Ezután MINDIG a .xcworkspace fájlt nyisd (nem az .xcodeproj-t):
+bashopen MotoGuard.xcworkspace
+d) SPM dependency-k hozzáadása (Xcode-ban: File → Add Package Dependencies):
+
+WhisperKit: https://github.com/argmaxinc/WhisperKit → 0.9.0+
+RevenueCat: https://github.com/RevenueCat/purchases-ios → 4.x+
+
+4.3 Info.plist – kötelező kulcsok
+Győződj meg hogy mind megvan:
+xml<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+<string>MotoGuard needs your location for accident detection and ride tracking</string>
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>MotoGuard needs your location to track your ride and detect accidents</string>
+<key>NSMotionUsageDescription</key>
+<string>MotoGuard uses motion sensors to detect accidents while riding</string>
+<key>NSMicrophoneUsageDescription</key>
+<string>MotoGuard uses the microphone for hands-free voice commands while riding</string>
+<key>NSSpeechRecognitionUsageDescription</key>
+<string>MotoGuard uses speech recognition for the voice assistant</string>
+<key>NSBluetoothAlwaysUsageDescription</key>
+<string>MotoGuard connects to your Bluetooth helmet headset for audio</string>
+<key>UIBackgroundModes</key>
+<array>
+    <string>location</string>
+    <string>audio</string>
+    <string>bluetooth-central</string>
+    <string>fetch</string>
+</array>
+<key>GMSApiKey</key>
+<string>PLACEHOLDER_REPLACE_WITH_REAL_KEY</string>
+4.4 Entitlements fájl (MotoGuard.entitlements)
+xml<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "...">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.personal-information.location</key>
+    <true/>
+    <key>com.apple.developer.bluetooth</key>
+    <true/>
+    <key>com.apple.backgroundtasks</key>
+    <true/>
+</dict>
+</plist>
+
+5. FÁZIS 2 – FORDÍTÁSI HIBÁK JAVÍTÁSA
+5.1 Első build futtatása
+bashxcodebuild \
+  -workspace MotoGuard.xcworkspace \
+  -scheme MotoGuard \
+  -destination 'platform=iOS Simulator,name=iPhone 15 Pro' \
+  build 2>&1 | grep -E "error:|warning:" | head -50
+5.2 Tipikus hibák és megoldásaik
+"stored property cannot be declared in extension"
+→ Megoldás: objc_setAssociatedObject pattern (már használjuk az AppEnvironment-ben, ugyanígy máshol is)
+"cannot find type X in scope"
+→ Megoldás: hiányzó import hozzáadása (import CoreLocation, import CoreMotion, stb.)
+"value of optional type must be unwrapped"
+→ Megoldás: guard let vagy ?? default value
+"protocol requires function"
+→ Megoldás: hiányzó protocol conformance implementálása
+"ambiguous use of"
+→ Megoldás: explicit type annotation hozzáadása
+5.3 Iterálj amíg ERROR: 0
+bash# Ezt futtasd újra és újra amíg clean build nincs:
+xcodebuild \
+  -workspace MotoGuard.xcworkspace \
+  -scheme MotoGuard \
+  -destination 'platform=iOS Simulator,name=iPhone 15 Pro' \
+  build 2>&1 | tail -5
+# Cél: "BUILD SUCCEEDED"
+
+6. FÁZIS 3 – STUB KÓDOK → VALÓDI IMPLEMENTÁCIÓ
+6.1 WhisperSTTEngine.swift – valódi WhisperKit
+Cseréld le az SFSpeechRecognizer stub-ot:
+swiftimport WhisperKit
+
+// Inicializálás:
+let whisper = try await WhisperKit(model: "openai_whisper-small")
+
+// Átírás:
+let result = try await whisper.transcribe(audioPath: audioFileURL.path)
+let text = result.first?.text ?? ""
+
+Első indításkor a modell letölt (~250 MB) – mutass progress-t a UI-on
+Ha a letöltés nem sikerül: graceful fallback Apple Speech framework-re
+Offline módban is működjön (a letöltött modellel)
+
+6.2 OnDeviceLLM.swift – LLM vagy intelligens fallback
+swift// Ellenőrizd hogy a .gguf modell létezik-e:
+let modelPath = Bundle.main.path(
+    forResource: "Llama-3.2-3B-Instruct-Q4_K_M",
+    ofType: "gguf"
+)
+
+if modelPath != nil {
+    // Valódi LLM (llama.cpp Swift binding)
+} else {
+    // Intelligens keyword-alapú válaszok
+    // Implementálj legalább 30 hasznos motoros választ:
+    // időjárás, navigáció, drón parancsok, baleset visszaigazolás,
+    // sebesség kérdések, benzinkút keresés, stb.
+}
+A LLM nélküli fallback NE crasheljen – az app teljesen működőképes legyen modell nélkül is.
+6.3 MGMapView.swift – Google Maps valódi implementáció
+swiftimport GoogleMaps
+
+func makeUIView(context: Context) -> GMSMapView {
+    let camera = GMSCameraPosition.camera(
+        withLatitude: 47.4979,
+        longitude: 19.0402,
+        zoom: 15
+    )
+    let mapView = GMSMapView(frame: .zero, camera: camera)
+    mapView.isTrafficEnabled = mapManager.showTraffic
+    mapView.mapType = .normal
+    mapView.settings.compassButton = true
+    mapView.settings.myLocationButton = false  // saját gombunk van
+    mapView.isMyLocationEnabled = true
+    return mapView
+}
+
+// Rider marker (narancssárga):
+let riderMarker = GMSMarker()
+riderMarker.position = riderCoordinate
+riderMarker.icon = GMSMarker.markerImage(with: .systemOrange)  
+riderMarker.title = "You"
+riderMarker.map = mapView
+
+// Drón marker:
+let droneMarker = GMSMarker()
+droneMarker.icon = UIImage(systemName: "airplane.circle.fill")?
+    .withTintColor(.orange)
+droneMarker.map = mapView
+
+// Sebesség alapján színezett útvonal polyline:
+// Zöld < 50 km/h, Sárga 50-90, Piros 90-130, Sötétvörös 130+
+let polyline = GMSPolyline(path: path)
+polyline.strokeWidth = 4.0
+polyline.spans = buildSpeedColoredSpans(from: rideTrack)
+polyline.map = mapView
+Ha nincs Google Maps kulcs → MKMapView fallback marad (már implementálva).
+6.4 SubscriptionManager.swift – RevenueCat bekapcsolása
+Kommenteld ki a stub purchase és uncommenteld a valódi RevenueCat kódot:
+swiftimport RevenueCat
+
+// App indításkor (MotoGuardApp.swift init()-ben):
+Purchases.configure(withAPIKey: "rc_pub_XXXX")
+
+// Purchase:
+let offerings = try await Purchases.shared.offerings()
+let result = try await Purchases.shared.purchase(package: package)
+
+// Entitlement check:
+let info = try await Purchases.shared.customerInfo()
+if info.entitlements["pro"]?.isActive == true { ... }
+6.5 EmergencyModule.swift – Feature flag ellenőrzés
+Minden emergency funkcióban add hozzá:
+swift// 112 hívás csak Basic+ tier felett:
+guard AppEnvironment.shared.subscription.features.emergencyCallEnabled else {
+    // Mutass paywall-t
+    return
+}
+6.6 MAVLink CRC checksum implementálás
+swift// ITU X.25 CRC-16 a MAVLinkWrapper.swift buildPacket() metódusban:
+private func crc16(data: Data, seed: UInt16 = 0xFFFF) -> UInt16 {
+    var crc = seed
+    for byte in data {
+        var tmp = UInt16(byte) ^ (crc & 0xFF)
+        tmp ^= (tmp << 4) & 0xFF
+        crc = (crc >> 8) ^ (tmp << 8) ^ (tmp << 3) ^ (tmp >> 4)
+    }
+    return crc
+}
+
+7. FÁZIS 4 – FEATURE FLAGS TELJES BEKÖTÉSE
+Az összes zárolt funkcióra tedd rá a FeatureGateView wrapper-t:
+swift// Voice Agent tab/gomb:
+FeatureGateView(feature: .voiceAgent, sub: env.subscription) {
+    VoiceAgentHUD(agent: env.voiceAgent)
+}
+
+// Drón panel:
+FeatureGateView(feature: .drone, sub: env.subscription) {
+    DroneStatusPanel(drone: env.drone)
+}
+
+// Export gomb:
+FeatureGateView(feature: .export, sub: env.subscription) {
+    ExportButton(...)
+}
+
+// Emergency 112 call:
+FeatureGateView(feature: .emergencyCall, sub: env.subscription) {
+    EmergencyCallButton(...)
+}
+A Free tier felhasználó mindenhol látja a funkciót (blurosan), és egy "Upgrade" gomb vezet a PaywallView-ra.
+
+8. FÁZIS 5 – UNIT TESZTEK
+bashxcodebuild test \
+  -workspace MotoGuard.xcworkspace \
+  -scheme MotoGuard \
+  -destination 'platform=iOS Simulator,name=iPhone 15 Pro' \
+  2>&1 | grep -E "Test Case|passed|failed|error"
+Elvárt eredmény: minden test passed.
+Ha failing test van, javítsd. Különösen:
+
+DroneTests – ARC constraints, NED konverzió
+EmergencyTests – SMS formátum, koordináták
+SensorTests – küszöbértékek, sliding window
+BluetoothTests – connection state machine
+
+
+9. FÁZIS 6 – APP STORE ANYAGOK
+9.1 Privacy Policy (kötelező!)
+Hozd létre: Resources/PrivacyPolicy.html
+Tartalom:
+
+On-device AI processing (nincs felhőbe küldött hang/adat)
+Helyadat: csak ride tracking, nem osztjuk meg harmadik féllel
+Crash adatok: csak a felhasználó eszközén tárolódnak
+GDPR compliant
+Kapcsolat: support@motoguard.app
+Magyar és angol verzió egy fájlban (language selector)
+
+9.2 App Store leírás
+Hozd létre: Resources/AppStoreMetadata.md
+markdown# App Store Metadata
+
+## Name
+MotoGuard – Ride Safe
+
+## Subtitle (30 char max)
+Accident Detection & Drone Cam
+
+## Keywords (100 char max)
+motorcycle,safety,crash,accident,detection,drone,ride,motorbike,biker,emergency,sos
+
+## Description EN (4000 char)
+[Írd meg a teljes angol leírást kiemelve:]
+- 3-level MAIDS standard accident detection
+- Automatic emergency SMS + 112 call
+- On-device AI Voice Agent (no cloud, fully private)
+- 6 languages: EN, HU, DE, ES, IT, PT
+- DJI FPV drone integration (Pro+Drone plan)
+- Ride history with GPX/CSV export
+- Works with any Bluetooth motorcycle headset
+
+## Description HU (4000 char)
+[Magyar verzió]
+
+## What's New (v1.0)
+First release – protecting riders worldwide.
+
+## Age Rating
+17+ – Infrequent/Mild Medical/Treatment Information
+
+## App Review Notes
+This is a motorcycle safety app that uses iOS motion sensors to detect
+accidents using the MAIDS standard algorithm. The app requires:
+
+1. Background location: continuously monitors rider position for
+   accident detection and ride tracking.
+
+2. Emergency call (112/911): CallKit integration requires user
+   voice confirmation before connecting. The call is NEVER made
+   automatically – a countdown timer gives the rider 30 seconds
+   to cancel. If the rider is unresponsive, only SMS is sent
+   automatically.
+
+3. Microphone: used exclusively for on-device speech recognition
+   (WhisperKit). No audio is sent to any server.
+
+Demo account for review: No login required.
+Test crash detection: Shake phone vigorously for 2 seconds.
+9.3 App ikon placeholder
+Hozd létre az Assets.xcassets/AppIcon.appiconset struktúrát.
+Ha nincs valódi ikon: generálj egy egyszerű SF Symbols alapú placeholder-t
+(shield.fill + motorcycle, narancs háttér, sötét szín) a következő méretekben:
+1024x1024, 180x180, 167x167, 152x152, 120x120, 87x87, 80x80, 76x76, 60x60, 58x58, 40x40, 29x29, 20x20
+
+10. FÁZIS 7 – RELEASE BUILD ÉS ARCHIVE ELŐKÉSZÍTÉS
+10.1 Release scheme konfiguráció
+bash# Ellenőrizd hogy Release konfigurációban is buildelhetünk:
+xcodebuild \
+  -workspace MotoGuard.xcworkspace \
+  -scheme MotoGuard \
+  -configuration Release \
+  -destination 'platform=iOS Simulator,name=iPhone 15 Pro' \
+  build 2>&1 | tail -5
+10.2 Archive parancs (ezt futtatjuk majd a végén)
+bashxcodebuild archive \
+  -workspace MotoGuard.xcworkspace \
+  -scheme MotoGuard \
+  -configuration Release \
+  -archivePath ./build/MotoGuard.xcarchive \
+  -allowProvisioningUpdates \
+  CODE_SIGN_STYLE=Automatic \
+  DEVELOPMENT_TEAM=XXXX  # ← Apple Developer Team ID ide
+10.3 Export options (IPA generáláshoz)
+Hozd létre: ExportOptions.plist
+xml<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>app-store</string>
+    <key>uploadBitcode</key>
+    <false/>
+    <key>uploadSymbols</key>
+    <true/>
+    <key>signingStyle</key>
+    <string>automatic</string>
+</dict>
+</plist>
+
+11. AMIT NEM TUDSZ AUTOMATIZÁLNI (manuális lépések)
+Ezeket ÉN végzem el, nem kell megpróbálnod:
+❌ Apple Developer Team ID megszerzése
+❌ Code signing / provisioning profile
+❌ Google Maps API kulcs (placeholder van, én cserélem)
+❌ RevenueCat kulcs (én adom meg)
+❌ LLM modell (.gguf fájl – 2 GB, manuálisan töltöm le)
+❌ Fizikai iPhone teszt
+❌ Xcode Organizer → Distribute App → App Store Connect
+❌ App Store Connect – screenshots, beküldés
+Ha elérsz egy ilyen ponthoz, írd ki:
+⚠️ MANUÁLIS LÉPÉS SZÜKSÉGES: [pontosan mit kell tennem]
+és folytasd amit tudod.
+
+12. PRIORITÁS SORREND HA ELAKADSZ
+1. BUILD SUCCEEDED  ← semmi más nem számít amíg ez nincs meg
+2. Simulator-on fut  ← alapfunkciók működnek-e
+3. Stub → valódi     ← API-ok, valódi SDK-k
+4. Feature flags     ← subscription bekötve mindenhol
+5. Tesztek           ← minden passed
+6. App Store anyagok ← leírás, privacy policy
+7. Archive           ← feltöltésre kész
+
+13. ELSŐ LÉPÉS
+Kezdd ezzel:
+bash# 1. Nézd meg mi van a mappában:
+find . -name "*.swift" | wc -l
+ls -la
+
+# 2. Ellenőrizd a dev environment-et:
+xcodebuild -version
+pod --version
+
+# 3. Futtasd az első build kísérletet:
+xcodebuild \
+  -scheme MotoGuard \
+  -destination 'platform=iOS Simulator,name=iPhone 15 Pro' \
+  build 2>&1 | grep "error:" | head -20
+Mutasd az első build eredményt és kezdj el dolgozni a hibákon.
+Ne kérdezz semmit – cselekedj, javíts, iterálj.
+
+MotoGuard – Protecting riders worldwide. 🏍️

@@ -1,0 +1,437 @@
+Végezd el az alábbi 5 fejlesztést sorban, egymás után.
+Minden fejlesztés után jelezd hogy kész és mutasd meg mit csináltál.
+Ne kezdj bele a következőbe amíg az előző nem kész.
+
+FEJLESZTÉS 1 – TÉRKÉP INTEGRÁCIÓ (react-native-maps)
+Mit kell csinálni:
+Adj hozzá egy teljes értékű térkép tabot az apphoz,
+útvonaltervezéssel és turn-by-turn hangnavigációval.
+Technológia:
+bashexpo install react-native-maps
+expo install expo-speech
+Új tab: "Map" (a meglévő 4 tab mellé 5. tabként)
+A Map tab tartalmazzon:
+A) Live térkép nézet:
+javascriptimport MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+
+// Teljes képernyős térkép
+<MapView
+  provider={PROVIDER_GOOGLE}
+  style={{ flex: 1 }}
+  showsUserLocation={true}
+  showsMyLocationButton={true}
+  followsUserLocation={true}
+  showsTraffic={true}
+  mapType="standard"
+  initialRegion={{
+    latitude: userLat,
+    longitude: userLon,
+    latitudeDelta: 0.01,
+    longitudeDelta: 0.01,
+  }}
+>
+  {/* Aktuális pozíció marker */}
+  <Marker coordinate={{ latitude: userLat, longitude: userLon }}>
+    <MotorcycleMarker heading={userHeading} />
+  </Marker>
+  
+  {/* Megtett útvonal – sebesség alapján színezve */}
+  {rideTrack.length > 1 && (
+    <Polyline
+      coordinates={rideTrack}
+      strokeWidth={4}
+      strokeColor={speedToColor(currentSpeed)}
+    />
+  )}
+  
+  {/* Navigációs útvonal */}
+  {navigationRoute && (
+    <Polyline
+      coordinates={navigationRoute}
+      strokeWidth={5}
+      strokeColor="#E8701A"
+      lineDashPattern={[0]}
+    />
+  )}
+</MapView>
+B) Útvonaltervező panel (alul kihúzható):
+javascript// Keresőmező célállomáshoz
+<TextInput
+  placeholder="Where are you going?"
+  value={destination}
+  onChangeText={setDestination}
+/>
+
+// Útvonal indítás gomb
+<TouchableOpacity onPress={startNavigation}>
+  <Text>Start Navigation</Text>
+</TouchableOpacity>
+
+// Becsült idő és távolság megjelenítése
+<Text>{estimatedTime} · {distanceKm} km</Text>
+C) Turn-by-turn navigáció:
+javascriptimport * as Speech from 'expo-speech';
+
+// Hangos utasítások (expo-speech):
+function announceNextTurn(instruction) {
+  Speech.speak(instruction, {
+    language: userLanguage, // a beállított nyelvhez igazodik
+    rate: 0.9,
+    pitch: 1.0,
+  });
+}
+
+// Példa utasítások:
+// "In 200 meters, turn right onto Main Street"
+// "Turn left. Then in 500 meters, turn right"
+// "You have arrived at your destination"
+
+// Fordulási pontok megjelenítése a térképen:
+{navigationWaypoints.map((wp, i) => (
+  <Marker key={i} coordinate={wp.coordinate}>
+    <TurnMarker direction={wp.direction} />
+  </Marker>
+))}
+D) Navigációs HUD (menet közben, képernyő tetején):
+javascript// Mindig látható navigációs sáv menet közben:
+{isNavigating && (
+  <View style={styles.navigationHUD}>
+    <TurnArrow direction={nextTurn.direction} />
+    <Text style={styles.distance}>{nextTurn.distance}</Text>
+    <Text style={styles.streetName}>{nextTurn.streetName}</Text>
+  </View>
+)}
+E) Google Maps API kulcs beállítása:
+javascript// app.json-ba add hozzá:
+"android": {
+  "config": {
+    "googleMaps": {
+      "apiKey": "GOOGLE_MAPS_API_KEY_PLACEHOLDER"
+    }
+  }
+}
+
+// iOS: app.json infoPlist-be:
+"GMSApiKey": "GOOGLE_MAPS_API_KEY_PLACEHOLDER"
+Megjegyzés: az API kulcsot majd én cserélem valódira,
+most maradjon PLACEHOLDER értékkel.
+Melyik csomagtól elérhető:
+
+Térkép megtekintése (live tracking): MINDEN csomag ✅
+Útvonaltervezés + turn-by-turn navigáció: Basic és felette ✅
+Free csomagnál: a térkép látható de navigáció zárolt, paywall jelenik meg
+
+
+FEJLESZTÉS 2 – VOICE AGENT ÁTALAKÍTÁS
+Jelenlegi állapot (ROSSZ):
+"Hold to Speak" gomb – motoros nem nyomhatja menet közben
+Új működés:
+A) Wake word alapú aktiválás – "Hey MotoGuard":
+javascriptimport { Audio } from 'expo-av';
+
+// Folyamatos háttér zajszint mérés:
+async function monitorAmbientNoise() {
+  const recording = new Audio.Recording();
+  await recording.prepareToRecordAsync({
+    android: { ...Audio.RecordingOptionsPresets.LOW_QUALITY },
+    ios: { ...Audio.RecordingOptionsPresets.LOW_QUALITY },
+  });
+  
+  // Decibel szint figyelés:
+  recording.setOnRecordingStatusUpdate((status) => {
+    const db = status.metering; // negatív szám, pl. -30 dB
+    
+    // Háttérzaj alap: sisak/motor zaja ~65-75 dB
+    // Emberi hang: általában 15-20 dB-vel magasabb mint a háttér
+    // Ha a különbség > 15 dB → valaki beszél
+    if (db > ambientNoiseLevel + 15) {
+      activateVoiceRecognition();
+    }
+  });
+}
+
+// Zajszint kalibrálás induláskor (5 másodperc):
+async function calibrateNoise() {
+  // 5 másodpercig mér és eltárolja az átlagos háttérzajt
+  setAmbientNoiseLevel(measuredAverage);
+}
+B) Bekapcsolás/kikapcsolás logika:
+javascript// Státusz:
+// OFF: nem hallgat, gomb látható a dashboardon
+// LISTENING: háttérben figyel, wake word-re vár
+// ACTIVE: felismerte a hangot, feldolgoz
+
+// Gomb csak álló / lassú járműnél (< 10 km/h):
+const canToggle = currentSpeed < 10;
+
+// Indításkor automatikus bekapcsolás ha korábban be volt kapcsolva:
+useEffect(() => {
+  const wasEnabled = await AsyncStorage.getItem('voiceAgentEnabled');
+  if (wasEnabled === 'true') {
+    startVoiceAgent();
+  }
+}, []);
+
+// 10 km/h felett automatikus bekapcsolás ha nem volt bekapcsolva:
+useEffect(() => {
+  if (currentSpeed >= 10 && !voiceAgentActive && isRiding) {
+    startVoiceAgent();
+    // Értesítés: "Voice Agent activated"
+  }
+}, [currentSpeed]);
+C) Dashboard UI változások:
+javascript// RÉGI (törlendő):
+<PushToTalkButton onPressIn={startRecording} onPressOut={stopRecording} />
+
+// ÚJ:
+// 1. Kis státusz ikon a dashboardon (nem nagy gomb):
+<VoiceAgentStatusBadge
+  status={voiceAgentStatus} // 'off' | 'listening' | 'active'
+  canToggle={currentSpeed < 10}
+  onToggle={toggleVoiceAgent}
+/>
+
+// 2. Vizuális feedback amikor hallgat:
+// - Szürkén pulzáló animáció: "Listening for Hey MotoGuard"
+// - Narancssárgán pulzáló: "Detecting voice..."
+// - Aktív: hullámforma animáció
+
+// 3. 10 km/h felett a gomb disabled + tooltip:
+// "Voice Agent is auto-managed above 10 km/h"
+D) Zajszűrő érzékenység beállítás (Profile > Settings):
+javascript// Csúszka: Low | Medium | High zajszűrés
+// Low: érzékeny, csendes úthoz
+// Medium: alapértelmezett (sisak + motor zaja)
+// High: erős zajszűrés (autópálya, viharos idő)
+
+<Slider
+  value={noiseFilterLevel}
+  onValueChange={setNoiseFilterLevel}
+  minimumValue={1}
+  maximumValue={3}
+  step={1}
+/>
+
+FEJLESZTÉS 3 – MOTOR MÁRKA TÉMA RENDSZER
+Márka témák:
+javascriptexport const BIKE_THEMES = {
+  default: {
+    name: 'MotoGuard',
+    primary: '#E8701A',      // narancs
+    secondary: '#1A3C5E',   // kék
+    background: '#0A0E1A',  // sötétkék
+    dashboardBg: '#0A0E1A',
+    icon: '🛡️',
+  },
+  kawasaki: {
+    name: 'Kawasaki',
+    primary: '#00A651',      // Kawasaki zöld
+    secondary: '#1A1A1A',
+    background: '#0A1A0F',
+    dashboardBg: '#0D1F12',
+    icon: '🟢',
+    logo: 'kawasaki_logo',
+  },
+  ducati: {
+    name: 'Ducati',
+    primary: '#CC0000',      // Ducati piros
+    secondary: '#8B0000',
+    background: '#1A0A0A',
+    dashboardBg: '#1F0D0D',
+    icon: '🔴',
+    logo: 'ducati_logo',
+  },
+  bmw: {
+    name: 'BMW Motorrad',
+    primary: '#0066CC',      // BMW kék
+    secondary: '#1C1C1C',
+    background: '#0A0F1A',
+    dashboardBg: '#0D1220',
+    icon: '🔵',
+    logo: 'bmw_logo',
+  },
+  honda: {
+    name: 'Honda',
+    primary: '#CC0000',      // Honda piros
+    secondary: '#1A1A1A',
+    background: '#1A0A0A',
+    dashboardBg: '#1F0D0D',
+    icon: '🔴',
+    logo: 'honda_logo',
+  },
+  yamaha: {
+    name: 'Yamaha',
+    primary: '#1B1464',      // Yamaha sötétkék
+    secondary: '#C0392B',
+    background: '#0A0A1A',
+    dashboardBg: '#0D0D20',
+    icon: '🟣',
+    logo: 'yamaha_logo',
+  },
+  suzuki: {
+    name: 'Suzuki',
+    primary: '#1B5E20',      // Suzuki zöld
+    secondary: '#F57F17',
+    background: '#0A1A0A',
+    dashboardBg: '#0D1F0D',
+    icon: '🟢',
+    logo: 'suzuki_logo',
+  },
+  ktm: {
+    name: 'KTM',
+    primary: '#FF6600',      // KTM narancs
+    secondary: '#1A1A1A',
+    background: '#1A0D0A',
+    dashboardBg: '#1F100D',
+    icon: '🟠',
+    logo: 'ktm_logo',
+  },
+};
+Téma alkalmazása:
+javascript// ThemeContext – minden komponensben elérhető:
+const ThemeContext = createContext(BIKE_THEMES.default);
+
+// App.js wrapper:
+<ThemeContext.Provider value={BIKE_THEMES[selectedBrand]}>
+  <NavigationContainer theme={appTheme}>
+    {/* ... */}
+  </NavigationContainer>
+</ThemeContext.Provider>
+
+// Használat bármelyik komponensben:
+const theme = useContext(ThemeContext);
+<View style={{ backgroundColor: theme.background }}>
+<Text style={{ color: theme.primary }}>
+
+// Splash screen dinamikus szín (app.config.js):
+backgroundColor: selectedTheme.background
+
+// Dashboard háttér: gyengéd márkalogó watermark (10% opacity)
+<Image
+  source={theme.logo}
+  style={{ opacity: 0.07, position: 'absolute', ... }}
+/>
+Témaválasztó UI (Profile > Appearance):
+javascript// 8 márka kártya vízszintes scroll-lal:
+<ScrollView horizontal>
+  {Object.entries(BIKE_THEMES).map(([key, theme]) => (
+    <BrandThemeCard
+      key={key}
+      theme={theme}
+      isSelected={selectedBrand === key}
+      isLocked={!hasProAccess} // Pro-tól elérhető
+      onSelect={() => setBrand(key)}
+    />
+  ))}
+</ScrollView>
+
+// Locked állapot (Free/Basic):
+// Kártya látható de lakat ikonnal + "Available on Pro"
+Melyik csomagtól elérhető:
+
+Témák megtekintése: mindenki látja
+Téma aktiválása: Pro és Pro+Drone csomagtól ✅
+Free/Basic: default MotoGuard téma, többi lockolt
+
+
+FEJLESZTÉS 4 – ÚJ ELŐFIZETÉSI STRUKTÚRA
+Régi → Új csomag táblázat:
+FREEBASICPROPRO+DRONELIFETIMEÁr$0$2.99/hó$5.99/hó$9.99/hó$39.99 egyszerBalesetdetekció (3 szint)✅✅✅✅✅SMS (1 kontakt)✅✅✅✅✅SMS (2 kontakt)❌✅✅✅✅112 CallKit❌✅✅✅✅Térkép + navigáció❌✅✅✅✅6 nyelv❌✅✅✅✅Voice Agent (wake word)❌❌✅✅✅Korlátlan ride history❌❌✅✅✅GPX/CSV export❌❌✅✅✅Motor márka téma❌❌✅✅✅DJI Drón (hamarosan)❌❌❌🔜🔜Priority support❌❌❌✅✅Minden jövőbeli funkció❌❌❌❌✅
+Lifetime ár logikája: Pro+Drone ($9.99) × 4 hónap = $39.99
+Fontos: Pro+Drone drón megjelenítése
+A drón integrációt így jelenítsd meg a Pro+Drone csomagban:
+javascript// Drone tab / szekció:
+<View style={styles.comingSoonContainer}>
+  <Text style={styles.comingSoonBadge}>COMING SOON</Text>
+  <Text style={styles.droneTitle}>🚁 DJI FPV Drone Integration</Text>
+  <Text style={styles.droneDesc}>
+    Connect your DJI FPV drone for aerial ride footage,
+    FOLLOW mode, ARC mode, and automatic GPS recovery.
+    Available in a future update for Pro+Drone subscribers.
+  </Text>
+  <Text style={styles.earlyAccessNote}>
+    ⭐ Subscribe now to get early access when it launches
+  </Text>
+</View>
+
+// NE legyen disabled gomb vagy hiba – csak informatív kártya
+Product ID-k (RevenueCat-ben):
+javascriptexport const PRODUCT_IDS = {
+  basic_monthly:    'com.motoguard.basic.monthly',      // $2.99
+  pro_monthly:      'com.motoguard.pro.monthly',        // $5.99
+  prodrone_monthly: 'com.motoguard.prodrone.monthly',   // $9.99
+  lifetime:         'com.motoguard.lifetime',            // $39.99 (one-time)
+};
+Paywall UI frissítése:
+javascript// Lifetime kártya külön kiemelve:
+<LifetimeCard>
+  <Badge>BEST VALUE</Badge>
+  <Title>Lifetime Access</Title>
+  <Price>$39.99</Price>
+  <Subtitle>One-time payment · Everything forever</Subtitle>
+  <Features>
+    ✅ All current features
+    ✅ All future features  
+    ✅ DJI Drone (when released)
+    ✅ Priority support
+    ✅ No recurring charges
+  </Features>
+</LifetimeCard>
+
+// Havi csomagok kompaktabb kártyákon alatta
+
+FEJLESZTÉS 5 – KISEBB JAVÍTÁSOK
+A) Ride stats a dashboardon:
+
+Jelenlegi sebesség: nagy szám, km/h
+Megtett távolság: automatikusan nő menet közben
+Menet ideje: mm:ss számláló
+Max sebesség: az aktuális menet maximuma
+
+B) Voice Agent státusz badge (dashboard):
+javascript// Kis pill/badge a dashboard jobb felső sarkában:
+// ⚫ OFF    – Voice Agent kikapcsolva
+// 🟡 READY  – Figyel, wake word-re vár  
+// 🟠 ACTIVE – Hangot érzékelt, feldolgoz
+// 🔵 SPEAK  – Válaszol
+
+<VoiceStatusBadge status={voiceStatus} speed={currentSpeed} />
+C) 10 km/h feletti UI zár:
+javascript// Ha sebesség > 10 km/h:
+// - Voice Agent toggle gomb: disabled + "Auto-managed while riding"
+// - Téma váltó: disabled
+// - Profil szerkesztés: disabled
+// - Navigáció úticél beírás: disabled (csak ha áll)
+// Minden ilyen helyen mutass egy kis info ikont magyarázattal
+D) Onboarding kiegészítés:
+A meglévő onboarding flow-ba add be:
+
+Motor márka választó lépés (képes kártya választó)
+Voice Agent kalibráció lépés ("5 másodpercig csend – kalibráljuk a zajszűrőt")
+Térkép engedély kérés lépés
+
+
+ELLENŐRZŐ LISTA FEJLESZTÉSEK UTÁN
+Minden fejlesztés végén ellenőrizd:
+[ ] Térkép tab megjelenik és betölt
+[ ] Live helyzet megjelenik a térképen
+[ ] Navigáció indítható (célállomás megadható)
+[ ] Hangnavigáció kimondja az utasításokat
+[ ] Voice Agent gomb csak < 10 km/h-nál aktív
+[ ] 10 km/h felett automatikusan bekapcsol a Voice Agent
+[ ] Wake word működik (teszt: mondd "Hey MotoGuard")
+[ ] Témák megjelennek a Profile > Appearance menüben
+[ ] Pro alatt a témák lockoltak
+[ ] Lifetime csomag megjelenik a paywall-on
+[ ] Pro+Drone csomagnál drón = "Coming Soon" kártya (nem hiba)
+[ ] Összes ár helyes: Basic $2.99, Pro $5.99, Pro+Drone $9.99, Lifetime $39.99
+[ ] Free felhasználónak a navigáció paywall-t mutat
+
+AMIT NE VÁLTOZTASS MEG
+
+A meglévő balesetdetekció logika (AccidentDetection)
+A meglévő Emergency protokoll (SMS, 112)
+A meglévő Ride History / Rides tab
+A RevenueCat integráció amit korábban beállítottál
+Az app.json bundle ID: com.motoguard.app
+

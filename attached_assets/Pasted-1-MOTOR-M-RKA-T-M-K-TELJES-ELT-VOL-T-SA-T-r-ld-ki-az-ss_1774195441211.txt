@@ -1,0 +1,153 @@
+1. MOTOR MÁRKA TÉMÁK TELJES ELTÁVOLÍTÁSA
+Töröld ki az összes motor márka téma related kódot:
+
+BIKE_THEMES objektum és minden tartalmát
+ThemeContext létrehozása és Provider wrapper (ha csak a témához kellett)
+Minden selectedBrand state és AsyncStorage mentés/betöltés
+Minden BrandThemeCard komponens
+A témaválasztó UI szekció a Profile > Appearance menüből
+Dashboard háttérben lévő márkalogó watermark (opacity-s Image)
+"Kawasaki Mode" / márkanév badge a dashboardon
+Minden import ami csak a témához kellett
+
+Ha az Appearance szekció teljesen üres marad a törlés után,
+távolítsd el magát az Appearance menüpontot is a Profile tabból.
+
+2. ELŐFIZETÉSI STRUKTÚRA FRISSÍTÉSE
+A motor téma eltávolítása miatt a Pro és Pro+Drone csomag
+közötti különbséget frissíteni kell.
+Új csomag tartalom:
+FREE – $0
+
+Balesetdetekció (3 szint, MAIDS standard)
+SMS értesítés (1 kontakt)
+5 mentett menet
+Térkép (live tracking, navigáció nélkül)
+
+BASIC – $2.99/hó
+
+Minden ami Free-ben van
+SMS értesítés (2 kontakt)
+112 automatikus hívás (CallKit)
+Térkép + turn-by-turn hangnavigáció
+6 nyelv (EN, HU, DE, ES, IT, PT)
+30 mentett menet
+
+PRO – $5.99/hó
+
+Minden ami Basic-ben van
+Voice Agent (Hey MotoGuard wake word + zajszűrő)
+Korlátlan mentett menet
+GPX / CSV export
+Részletes ride statisztikák
+
+PRO+DRONE – $9.99/hó
+
+Minden ami Pro-ban van
+Prioritás support (48 órán belüli válasz)
+Korai hozzáférés új funkciókhoz
+DJI Drone integráció (hamarosan – Coming Soon kártya)
+
+LIFETIME – $39.99 (egyszeri)
+
+Minden funkció örökre
+Minden jövőbeli funkció automatikusan
+DJI Drone integráció amikor megjelenik
+Legmagasabb prioritású support
+
+Paywall UI:
+
+Lifetime kártya legyen a leglátványosabb, "BEST VALUE" badge-del
+Pro+Drone és Lifetime esetén a drón szekció így jelenjen meg:
+
+┌─────────────────────────────────┐
+│  🚁 DJI Drone Integration       │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━   │
+│  COMING SOON                    │
+│  Aerial footage, FOLLOW mode,   │
+│  GPS recovery – in a future     │
+│  update for this plan.          │
+│  ⭐ Subscribe now for early     │
+│     access when it launches     │
+└─────────────────────────────────┘
+
+3. LIGHT / DARK MODE VISSZAÁLLÍTÁSA
+Eredeti rendszer visszaállítása:
+javascript// useColorScheme hook – ez az egyetlen téma forrás:
+import { useColorScheme } from 'react-native';
+
+const colorScheme = useColorScheme(); // 'light' | 'dark'
+const isDark = colorScheme === 'dark';
+Szín rendszer (csak ezt használd, semmi más):
+javascriptexport const Colors = {
+  dark: {
+    background:      '#0A0E1A',
+    backgroundCard:  '#13192B',
+    backgroundInput: '#1C2438',
+    text:            '#FFFFFF',
+    textSecondary:   '#8B9CC8',
+    textMuted:       '#4A5680',
+    accent:          '#E8701A',   // MotoGuard narancs – minden témában ugyanez
+    accentLight:     '#FF8C3A',
+    border:          '#1E2840',
+    success:         '#22C55E',
+    warning:         '#F59E0B',
+    danger:          '#EF4444',
+  },
+  light: {
+    background:      '#F5F5F5',
+    backgroundCard:  '#FFFFFF',
+    backgroundInput: '#EFEFEF',
+    text:            '#0A0E1A',
+    textSecondary:   '#4A5680',
+    textMuted:       '#8B9CC8',
+    accent:          '#E8701A',   // MotoGuard narancs – minden témában ugyanez
+    accentLight:     '#C85A10',
+    border:          '#E0E0E0',
+    success:         '#16A34A',
+    warning:         '#D97706',
+    danger:          '#DC2626',
+  },
+};
+
+// Használat minden komponensben:
+const { isDark, colors } = useTheme();
+// ahol useTheme() visszaadja az aktuális Colors.dark vagy Colors.light értékeket
+useTheme hook (ez legyen az egyetlen téma hook):
+javascriptimport { useColorScheme } from 'react-native';
+import { Colors } from '../constants/Colors';
+
+export function useTheme() {
+  const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
+  return {
+    isDark,
+    colors: isDark ? Colors.dark : Colors.light,
+  };
+}
+Profile > Appearance szekció (ha marad):
+Ha az Appearance szekció megmarad a Profile-ban (téma törlés után),
+csak ezt tartalmazza:
+Appearance
+──────────
+Display Mode
+  ○ Light
+  ● Dark       ← ha a rendszer dark
+  ○ Auto (System default)   ← ajánlott
+Ez egy egyszerű 3-opciós választó legyen,
+ami AsyncStorage-ba menti a preferenciát
+és felülírja a system default-ot ha a user explicit választ.
+
+4. ELLENŐRZÉS
+Fejlesztés után ellenőrizd:
+[ ] Nincs egyetlen "BIKE_THEMES" / "kawasaki" / "ducati" referencia sem a kódban
+[ ] Nincs watermark logó a dashboardon
+[ ] Nincs márka badge a dashboardon
+[ ] Profile > Appearance csak Light/Dark/Auto választót tartalmaz
+[ ] Dark mode-ban minden szöveg olvasható
+[ ] Light mode-ban minden szöveg olvasható
+[ ] Az accent szín (narancs #E8701A) mindkét módban megjelenik
+[ ] A 4 csomag ára helyes: $2.99 / $5.99 / $9.99 / $39.99
+[ ] Lifetime = $39.99 "BEST VALUE" badge-del kiemelve
+[ ] Pro+Drone drón szekció = "Coming Soon" kártya (nem hiba, nem disabled gomb)
+[ ] Balesetdetekció és Emergency változatlan
