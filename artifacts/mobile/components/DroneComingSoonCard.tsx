@@ -6,6 +6,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { useApp, STRINGS } from "@/context/AppContext";
 import { logDroneInterest } from "@/constants/SheetsClient";
 
+const ACCENT = "#E8701A";
+
 const DRONE_POLL = {
   question: {
     hu: "Érdekel a drón funkció?",
@@ -29,7 +31,7 @@ const DRONE_POLL = {
     de: "Nicht wirklich",
     es: "No mucho",
     it: "Non molto",
-    pt: "Não molto",
+    pt: "Não muito",
   },
   thankYes: {
     hu: "Köszönjük! Értesítünk ha elérhető.",
@@ -47,17 +49,31 @@ const DRONE_POLL = {
     it: "Grazie per il tuo feedback!",
     pt: "Obrigado pelo teu feedback!",
   },
+  comingSoon: {
+    hu: "HAMAROSAN",
+    en: "COMING SOON",
+    de: "DEMNÄCHST",
+    es: "PRÓXIMAMENTE",
+    it: "PROSSIMAMENTE",
+    pt: "EM BREVE",
+  },
 };
 
-export function DroneInterestPoll({ lang, tier }: { lang: string; tier: string }) {
+function get(obj: Record<string, string>, lang: string): string {
+  return (obj as any)[lang] ?? obj.en;
+}
+
+export function DronePollCard() {
   const { c } = useTheme();
+  const { settings } = useApp();
+  const lang = settings.language;
+  const tier = settings.subscription;
+
   const [loaded, setLoaded] = useState(false);
   const [alreadyVoted, setAlreadyVoted] = useState(false);
   const [showThankYou, setShowThankYou] = useState(false);
   const [thankText, setThankText] = useState("");
   const [visible, setVisible] = useState(true);
-
-  const get = (obj: Record<string, string>) => (obj as any)[lang] ?? obj.en;
 
   useEffect(() => {
     AsyncStorage.getItem("drone_interest_voted").then((v) => {
@@ -69,7 +85,7 @@ export function DroneInterestPoll({ lang, tier }: { lang: string; tier: string }
   const handleVote = async (choice: "yes" | "no") => {
     await AsyncStorage.setItem("drone_interest_voted", choice);
     logDroneInterest(choice, lang, tier).catch(() => {});
-    setThankText(choice === "yes" ? get(DRONE_POLL.thankYes) : get(DRONE_POLL.thankNo));
+    setThankText(choice === "yes" ? get(DRONE_POLL.thankYes, lang) : get(DRONE_POLL.thankNo, lang));
     setShowThankYou(true);
     setTimeout(() => setVisible(false), 2000);
   };
@@ -77,30 +93,33 @@ export function DroneInterestPoll({ lang, tier }: { lang: string; tier: string }
   if (!loaded || alreadyVoted || !visible) return null;
 
   return (
-    <View style={[pollStyles.card, { backgroundColor: "rgba(175,82,222,0.06)", borderColor: "rgba(175,82,222,0.2)" }]}>
+    <View style={[poll.card, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
+      <View style={poll.topRow}>
+        <View style={[poll.iconCircle, { backgroundColor: `rgba(232,112,26,0.12)` }]}>
+          <Text style={poll.droneEmoji}>🚁</Text>
+        </View>
+        <View style={[poll.badge, { backgroundColor: `rgba(232,112,26,0.15)` }]}>
+          <Text style={[poll.badgeText, { color: ACCENT }]}>{get(DRONE_POLL.comingSoon, lang)}</Text>
+        </View>
+      </View>
+
       {showThankYou ? (
-        <Text style={pollStyles.thankText}>{thankText}</Text>
+        <Text style={[poll.thankText, { color: ACCENT }]}>{thankText}</Text>
       ) : (
         <>
-          <Text style={[pollStyles.question, { color: c.text }]}>{get(DRONE_POLL.question)}</Text>
-          <View style={pollStyles.btns}>
+          <Text style={[poll.question, { color: c.text }]}>{get(DRONE_POLL.question, lang)}</Text>
+          <View style={poll.btns}>
             <Pressable
               onPress={() => handleVote("yes")}
-              style={({ pressed }) => [
-                pollStyles.btn,
-                { backgroundColor: "rgba(175,82,222,0.15)", borderColor: "rgba(175,82,222,0.5)", opacity: pressed ? 0.8 : 1 },
-              ]}
+              style={({ pressed }) => [poll.btn, poll.btnYes, { opacity: pressed ? 0.8 : 1 }]}
             >
-              <Text style={[pollStyles.btnText, { color: "#AF52DE" }]}>{get(DRONE_POLL.yes)}</Text>
+              <Text style={poll.btnYesText}>{get(DRONE_POLL.yes, lang)}</Text>
             </Pressable>
             <Pressable
               onPress={() => handleVote("no")}
-              style={({ pressed }) => [
-                pollStyles.btn,
-                { backgroundColor: c.backgroundTertiary, borderColor: c.cardBorder, opacity: pressed ? 0.8 : 1 },
-              ]}
+              style={({ pressed }) => [poll.btn, poll.btnNo, { borderColor: c.cardBorder, opacity: pressed ? 0.8 : 1 }]}
             >
-              <Text style={[pollStyles.btnText, { color: c.textSecondary }]}>{get(DRONE_POLL.no)}</Text>
+              <Text style={[poll.btnNoText, { color: c.textSecondary }]}>{get(DRONE_POLL.no, lang)}</Text>
             </Pressable>
           </View>
         </>
@@ -109,13 +128,61 @@ export function DroneInterestPoll({ lang, tier }: { lang: string; tier: string }
   );
 }
 
-const pollStyles = StyleSheet.create({
-  card: { marginTop: 10, borderRadius: 12, borderWidth: 1, padding: 14, gap: 12 },
-  question: { fontSize: 14, fontFamily: "Inter_600SemiBold", textAlign: "center" },
-  btns: { flexDirection: "row", gap: 8 },
-  btn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: "center", borderWidth: 1 },
-  btnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  thankText: { fontSize: 14, fontFamily: "Inter_600SemiBold", textAlign: "center", color: "#AF52DE" },
+const poll = StyleSheet.create({
+  card: {
+    marginHorizontal: 20,
+    marginBottom: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    gap: 12,
+  },
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  droneEmoji: { fontSize: 22 },
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 0.8,
+  },
+  question: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    textAlign: "center",
+  },
+  btns: { flexDirection: "row", gap: 10 },
+  btn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnYes: { backgroundColor: ACCENT },
+  btnYesText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#FFF" },
+  btnNo: { backgroundColor: "transparent", borderWidth: 1 },
+  btnNoText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  thankText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    textAlign: "center",
+    paddingVertical: 4,
+  },
 });
 
 export function DroneComingSoonCard() {
@@ -160,8 +227,6 @@ export function DroneComingSoonCard() {
         <Ionicons name="star" size={14} color="#AF52DE" />
         <Text style={[styles.earlyText, { color: "#AF52DE" }]}>{t.droneEarlyAccess}</Text>
       </View>
-
-      <DroneInterestPoll lang={settings.language} tier={settings.subscription} />
     </View>
   );
 }

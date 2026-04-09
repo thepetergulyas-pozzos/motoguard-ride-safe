@@ -15,7 +15,6 @@ import { useApp, TIER_FEATURES, type SubscriptionTier } from "@/context/AppConte
 import { useSubscription } from "@/lib/revenuecat";
 import { Button } from "./Button";
 import { logAppEvent } from "@/constants/SheetsClient";
-import { DroneInterestPoll } from "@/components/DroneComingSoonCard";
 
 type Props = { visible: boolean; onClose: () => void; featureName?: string };
 
@@ -161,10 +160,6 @@ export function PaywallModal({ visible, onClose, featureName }: Props) {
               );
             })}
 
-            {/* Drone Interest Poll – shown for Free / Basic / Pro users */}
-            {settings.subscription !== "pro_drone" && settings.subscription !== "lifetime" && (
-              <DroneInterestPoll lang={settings.language} tier={settings.subscription} />
-            )}
           </ScrollView>
 
           <Button label="Maybe Later" onPress={onClose} variant="ghost" style={{ marginTop: 8, marginHorizontal: 20 }} />

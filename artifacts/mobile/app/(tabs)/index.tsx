@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AccidentDetectionCard } from "@/components/AccidentDetectionCard";
 import { VoiceAgentCard } from "@/components/VoiceAgentCard";
 import { VoiceStatusBadge } from "@/components/VoiceStatusBadge";
-import { DroneComingSoonCard } from "@/components/DroneComingSoonCard";
+import { DroneComingSoonCard, DronePollCard } from "@/components/DroneComingSoonCard";
 import { useApp, STRINGS, TIER_FEATURES } from "@/context/AppContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useRideTracking } from "@/hooks/useRideTracking";
@@ -240,6 +240,8 @@ export default function DashboardScreen() {
           <DroneComingSoonCard />
         </>
       )}
+
+      <DronePollCard />
     </ScrollView>
   );
 }
