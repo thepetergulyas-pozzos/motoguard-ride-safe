@@ -29,6 +29,7 @@ import {
   FAQ_ITEMS,
   type FeatureRequest,
 } from "@/constants/SupportConfig";
+import { logSupportTicket, logFeatureVote } from "@/constants/SheetsClient";
 
 type View = "main" | "bug" | "feature" | "safety" | "faq";
 
@@ -144,6 +145,7 @@ function BugReportView({ c, s, lang, tier, renderHeader, insets }: any) {
 
   const sendReport = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    logSupportTicket("Bug", category, summary, description, lang, tier).catch(() => {});
     const subject = encodeURIComponent(`[MotoGuard Bug] ${category} – v${APP_VERSION}`);
     const body = encodeURIComponent(
       `Category: ${category}\nSummary: ${summary}\nDescription: ${description}\nWhen: ${when}\n\n--- Automatic Info ---\nApp Version: ${APP_VERSION}\nOS: ${Platform.OS} ${Platform.Version}\nSubscription: ${tier}\nLanguage: ${lang}`
@@ -229,6 +231,7 @@ function SafetyIssueView({ c, s, lang, tier, renderHeader, insets }: any) {
 
   const sendReport = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    logSupportTicket("Safety", issueType, "", description, lang, tier).catch(() => {});
     const subject = encodeURIComponent(`[SAFETY CRITICAL] ${issueType} – v${APP_VERSION}`);
     const body = encodeURIComponent(
       `SAFETY ISSUE REPORT – PRIORITY\n\nIssue Type: ${issueType}\nWhen: ${when}\nDescription: ${description}\n\n--- Automatic Info ---\nApp Version: ${APP_VERSION}\nOS: ${Platform.OS} ${Platform.Version}\nSubscription: ${tier}\nLanguage: ${lang}`
@@ -322,6 +325,11 @@ function FeatureRequestView({ c, s, lang, tier, renderHeader, insets }: any) {
 
   const toggleVote = async (featureId: string) => {
     Haptics.selectionAsync();
+    const wasVoted = !!votes[featureId];
+    const action = wasVoted ? "unvote" : "vote";
+    const feature = DEFAULT_FEATURE_REQUESTS.find((f) => f.id === featureId);
+    const featureName = (feature?.title as any)?.[lang] ?? feature?.title?.en ?? featureId;
+    logFeatureVote(featureId, featureName, action, lang, tier).catch(() => {});
     const newVotes = { ...votes };
     const delta = newVotes[featureId] ? -1 : 1;
     if (newVotes[featureId]) delete newVotes[featureId];

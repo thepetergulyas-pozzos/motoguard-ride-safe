@@ -13,6 +13,7 @@ import { useVoiceAgent } from "@/hooks/useVoiceAgent";
 import { useAccidentDetection } from "@/hooks/useAccidentDetection";
 import { useLowBatteryAlert } from "@/hooks/useLowBatteryAlert";
 import { getGpsStatus } from "@/services/LocationService";
+import { logAppEvent } from "@/constants/SheetsClient";
 
 function formatDuration(s: number): string {
   const h = Math.floor(s / 3600);
@@ -120,8 +121,14 @@ export default function DashboardScreen() {
   }, [accidentAlert]);
 
   const handleRideToggle = async () => {
-    if (ride.active) stopRide();
-    else await startRide();
+    if (ride.active) {
+      stopRide();
+    } else {
+      if (settings.rideLogs.length === 0) {
+        logAppEvent("first_ride_started", settings.language, settings.subscription).catch(() => {});
+      }
+      await startRide();
+    }
   };
 
   const gpsLost = ride.active && getGpsStatus() === "lost";

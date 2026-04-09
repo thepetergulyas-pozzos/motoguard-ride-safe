@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -14,6 +14,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useApp, TIER_FEATURES, type SubscriptionTier } from "@/context/AppContext";
 import { useSubscription } from "@/lib/revenuecat";
 import { Button } from "./Button";
+import { logAppEvent } from "@/constants/SheetsClient";
 
 type Props = { visible: boolean; onClose: () => void; featureName?: string };
 
@@ -48,12 +49,19 @@ export function PaywallModal({ visible, onClose, featureName }: Props) {
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [confirmTier, setConfirmTier] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (visible) {
+      logAppEvent("paywall_opened", settings.language, settings.subscription, featureName ?? "").catch(() => {});
+    }
+  }, [visible]);
+
   const handleSelect = async (offeringKey: string, pkg: any) => {
     const meta = offeringKey === "lifetime" ? LIFETIME_META : PLAN_META[offeringKey];
     if (!meta) return;
 
     if (!isConfigured) {
       updateSettings({ subscription: meta.tier });
+      logAppEvent("subscription_purchased", settings.language, meta.tier, meta.tier).catch(() => {});
       onClose();
       return;
     }
@@ -67,6 +75,7 @@ export function PaywallModal({ visible, onClose, featureName }: Props) {
       setPurchasing(offeringKey);
       await purchase(pkg);
       updateSettings({ subscription: meta.tier });
+      logAppEvent("subscription_purchased", settings.language, meta.tier, meta.tier).catch(() => {});
       onClose();
     } catch (e: any) {
       if (!e?.userCancelled) console.error("Purchase error:", e);
@@ -83,6 +92,7 @@ export function PaywallModal({ visible, onClose, featureName }: Props) {
       setPurchasing(offeringKey);
       await purchase(pkg);
       updateSettings({ subscription: meta.tier });
+      logAppEvent("subscription_purchased", settings.language, meta.tier, meta.tier).catch(() => {});
       onClose();
     } catch (e: any) {
       if (!e?.userCancelled) console.error("Purchase error:", e);
