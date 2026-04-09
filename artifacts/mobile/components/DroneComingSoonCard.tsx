@@ -49,7 +49,7 @@ const DRONE_POLL = {
   },
 };
 
-function DroneInterestPoll({ lang, tier }: { lang: string; tier: string }) {
+export function DroneInterestPoll({ lang, tier }: { lang: string; tier: string }) {
   const { c } = useTheme();
   const [loaded, setLoaded] = useState(false);
   const [alreadyVoted, setAlreadyVoted] = useState(false);
