@@ -10,7 +10,6 @@ import {
   Text,
   View,
 } from "react-native";
-import Colors from "@/constants/colors";
 import { useApp, STRINGS } from "@/context/AppContext";
 import { useTheme } from "@/hooks/useTheme";
 import { type AlertState } from "@/hooks/useAccidentDetection";
@@ -120,8 +119,8 @@ export function AccidentAlertOverlay({ alert, onDismiss }: Props) {
 
           {level === "emergency" && (
             <View style={styles.emergencyInfo}>
-              <Ionicons name="checkmark-circle" size={18} color={Colors.dark.success} />
-              <Text style={[styles.emergencyText, { color: Colors.dark.success }]}>
+              <Ionicons name="checkmark-circle" size={18} color={c.success} />
+              <Text style={[styles.emergencyText, { color: c.success }]}>
                 {settings.emergencyContacts.length > 0 ? smsSentText : t.noContactsConfig}
               </Text>
             </View>

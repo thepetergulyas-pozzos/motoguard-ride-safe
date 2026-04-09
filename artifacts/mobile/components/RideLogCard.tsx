@@ -28,7 +28,7 @@ export function RideLogCard({ ride }: Props) {
     <View style={[styles.card, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
       <View style={styles.header}>
         <View style={[styles.icon, { backgroundColor: "rgba(255,107,26,0.12)" }]}>
-          <Ionicons name="map" size={18} color={Colors.dark.tint} />
+          <Ionicons name="map" size={18} color={c.tint} />
         </View>
         <View style={styles.headerText}>
           <Text style={[styles.route, { color: c.text }]}>{ride.route || "Unnamed Route"}</Text>

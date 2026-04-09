@@ -23,6 +23,7 @@ import { PaywallModal } from "@/components/ui/PaywallModal";
 import { NativeMapView } from "@/components/map/MapViewNative";
 
 const TAB_BAR_HEIGHT = 49;
+const ACCENT = "#E8701A";
 
 if (Platform.OS === "android") {
   UIManager.setLayoutAnimationEnabledExperimental?.(true);
@@ -53,7 +54,7 @@ export default function MapScreen() {
     }
   }, [accidentActive]);
 
-  const canNavigate = features.emergencyCall;
+  const canNavigate = features.mapNav;
 
   const userLocation =
     trackPoints.length > 0
@@ -147,7 +148,7 @@ function NavigationHUD({
   onStop: () => void;
 }) {
   return (
-    <View style={[styles.hud, { backgroundColor: Colors.dark.tint }]}>
+    <View style={[styles.hud, { backgroundColor: ACCENT }]}>
       <TurnArrow direction={step.direction} color="#FFF" />
       <View style={styles.hudText}>
         <Text style={styles.hudDistance}>{step.distance}</Text>
@@ -270,7 +271,7 @@ function DestinationSearch({
             style={({ pressed }) => [
               styles.startBtn,
               {
-                backgroundColor: Colors.dark.tint,
+                backgroundColor: c.tint,
                 opacity: !nav.destination.trim() || nav.status === "searching" ? 0.5 : pressed ? 0.85 : 1,
               },
             ]}
@@ -287,8 +288,8 @@ function DestinationSearch({
 
           {!canNavigate && (
             <View style={[styles.lockedBanner, { backgroundColor: "rgba(255,107,26,0.1)", borderColor: "rgba(255,107,26,0.3)" }]}>
-              <Ionicons name="lock-closed" size={14} color={Colors.dark.tint} />
-              <Text style={[styles.lockedText, { color: Colors.dark.tint }]}>{t.navLocked}</Text>
+              <Ionicons name="lock-closed" size={14} color={c.tint} />
+              <Text style={[styles.lockedText, { color: c.tint }]}>{t.navLocked}</Text>
             </View>
           )}
 
@@ -325,7 +326,7 @@ function ActiveNavInfo({
     <View style={styles.activeNav}>
       {step && (
         <View style={styles.stepRow}>
-          <TurnArrow direction={step.direction} color={Colors.dark.tint} />
+          <TurnArrow direction={step.direction} color={c.tint} />
           <View style={styles.stepText}>
             <Text style={[styles.stepInstruction, { color: c.text }]} numberOfLines={2}>
               {step.instruction}

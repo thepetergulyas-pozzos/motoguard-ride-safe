@@ -376,7 +376,7 @@ export default function ProfileScreen() {
             <Ionicons name="help-buoy" size={18} color="#E8701A" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.rowLabel, { color: c.text }]}>{t.supportLabel}</Text>
+            <Text style={{ fontSize: 15, fontFamily: "Inter_500Medium", color: c.text }}>{t.supportLabel}</Text>
             <Text style={[styles.rowValue, { color: c.textSecondary }]}>Bug reports · FAQ · Feature requests</Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={c.textTertiary} />

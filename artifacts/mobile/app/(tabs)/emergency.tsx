@@ -13,7 +13,6 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Colors from "@/constants/colors";
 import { EmergencySOSButton } from "@/components/EmergencySOSButton";
 import { STRINGS, TIER_FEATURES, type EmergencyContact, useApp } from "@/context/AppContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -39,7 +38,7 @@ function ContactItem({ contact, onRemove }: { contact: EmergencyContact; onRemov
           { backgroundColor: "rgba(255,59,48,0.1)", opacity: pressed ? 0.7 : 1 },
         ]}
       >
-        <Ionicons name="trash-outline" size={18} color={Colors.dark.danger} />
+        <Ionicons name="trash-outline" size={18} color={c.danger} />
       </Pressable>
     </View>
   );
@@ -155,7 +154,7 @@ export default function EmergencyScreen() {
             <Text style={[styles.pageTitle, { color: c.text }]}>{t.emergency}</Text>
             <EmergencySOSButton />
             <View style={[styles.infoCard, { backgroundColor: "rgba(255,107,26,0.08)", borderColor: "rgba(255,107,26,0.2)" }]}>
-              <Ionicons name="information-circle" size={20} color={Colors.dark.tint} />
+              <Ionicons name="information-circle" size={20} color={c.tint} />
               <Text style={[styles.infoText, { color: c.textSecondary }]}>{infoText}</Text>
             </View>
             <View style={styles.sectionHeader}>
@@ -204,7 +203,7 @@ const styles = StyleSheet.create({
   contactCount: { fontSize: 14, fontFamily: "Inter_500Medium" },
   contactCard: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, borderWidth: 1, padding: 14 },
   avatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 15, fontFamily: "Inter_700Bold", color: Colors.dark.tint },
+  avatarText: { fontSize: 15, fontFamily: "Inter_700Bold", color: "#E8701A" },
   contactInfo: { flex: 1, gap: 3 },
   contactName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   contactPhone: { fontSize: 13, fontFamily: "Inter_400Regular" },

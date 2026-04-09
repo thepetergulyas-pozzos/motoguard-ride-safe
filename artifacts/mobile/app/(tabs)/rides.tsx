@@ -11,7 +11,6 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Colors from "@/constants/colors";
 import { RideLogCard } from "@/components/RideLogCard";
 import { STRINGS, TIER_FEATURES, useApp } from "@/context/AppContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -35,7 +34,7 @@ function SimulateRideButton({ onSimulate, t }: { onSimulate: () => void; t: Reco
       style={({ pressed }) => [
         styles.simulateBtn,
         {
-          backgroundColor: active ? Colors.dark.tint : c.backgroundTertiary,
+          backgroundColor: active ? c.tint : c.backgroundTertiary,
           transform: [{ scale: pressed ? 0.97 : 1 }],
         },
       ]}
@@ -130,7 +129,7 @@ export default function RidesScreen() {
                 label={t.totalDistance}
                 value={`${settings.rideLogs.reduce((acc, r) => acc + r.distance, 0).toFixed(0)} km`}
                 icon="map"
-                color={Colors.dark.tint}
+                color={c.tint}
               />
             </View>
 
@@ -142,11 +141,11 @@ export default function RidesScreen() {
                   { backgroundColor: "rgba(255,107,26,0.08)", borderColor: "rgba(255,107,26,0.2)", opacity: pressed ? 0.8 : 1 },
                 ]}
               >
-                <Ionicons name="download-outline" size={18} color={Colors.dark.tint} />
-                <Text style={[styles.exportText, { color: Colors.dark.tint }]} numberOfLines={1}>
+                <Ionicons name="download-outline" size={18} color={c.tint} />
+                <Text style={[styles.exportText, { color: c.tint }]} numberOfLines={1}>
                   {t.exportUnlock} → Pro
                 </Text>
-                <Ionicons name="chevron-forward" size={16} color={Colors.dark.tint} />
+                <Ionicons name="chevron-forward" size={16} color={c.tint} />
               </Pressable>
             )}
 
