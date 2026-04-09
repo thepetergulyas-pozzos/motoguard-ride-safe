@@ -3,8 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  Linking,
-  Platform,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,7 +17,6 @@ import { useApp } from "@/context/AppContext";
 import { useTheme } from "@/hooks/useTheme";
 import {
   APP_VERSION,
-  SUPPORT_EMAILS,
   APP_STORE_URL,
   PLAY_STORE_URL,
   RESPONSE_TIMES,
@@ -30,10 +28,87 @@ import {
   type FeatureRequest,
 } from "@/constants/SupportConfig";
 import { logSupportTicket, logFeatureVote } from "@/constants/SheetsClient";
-
-type View = "main" | "bug" | "feature" | "safety" | "faq";
+import { Linking, Platform } from "react-native";
 
 const ACCENT = "#E8701A";
+const SUPPORT_EMAIL = "thepeter.gulyas@gmail.com";
+
+const SUCCESS_STRINGS = {
+  bugTitle:    { hu: "Köszönjük!", en: "Thank you!", de: "Danke!", es: "¡Gracias!", it: "Grazie!", pt: "Obrigado!" },
+  bugBody:     {
+    hu: "Visszajelzésedet megkaptuk és hamarosan megvizsgáljuk.",
+    en: "We received your feedback and will look into it shortly.",
+    de: "Wir haben dein Feedback erhalten und werden es bald prüfen.",
+    es: "Hemos recibido tu feedback y lo revisaremos pronto.",
+    it: "Abbiamo ricevuto il tuo feedback e lo esamineremo a breve.",
+    pt: "Recebemos o teu feedback e iremos analisá-lo em breve.",
+  },
+  safetyTitle: { hu: "Köszönjük!", en: "Thank you!", de: "Danke!", es: "¡Gracias!", it: "Grazie!", pt: "Obrigado!" },
+  safetyBody:  {
+    hu: "Biztonsági problémádat prioritásként kezeljük.\n24 órán belül foglalkozunk vele.",
+    en: "Your safety issue has been flagged as priority.\nWe will address it within 24 hours.",
+    de: "Dein Sicherheitsproblem wurde als Priorität markiert.\nWir werden es innerhalb von 24 Stunden bearbeiten.",
+    es: "Tu problema de seguridad ha sido marcado como prioritario.\nLo atenderemos en 24 horas.",
+    it: "Il tuo problema di sicurezza è stato contrassegnato come prioritario.\nLo affronteremo entro 24 ore.",
+    pt: "O teu problema de segurança foi marcado como prioritário.\nIremos tratá-lo em 24 horas.",
+  },
+  gotIt:       { hu: "Rendben", en: "Got it", de: "Verstanden", es: "Entendido", it: "Capito", pt: "Entendido" },
+};
+
+function g(obj: Record<string, string>, lang: string): string {
+  return (obj as any)[lang] ?? obj.en;
+}
+
+type SuccessType = "bug" | "safety";
+
+function SuccessModal({
+  visible,
+  type,
+  lang,
+  onClose,
+}: {
+  visible: boolean;
+  type: SuccessType;
+  lang: string;
+  onClose: () => void;
+}) {
+  const { c } = useTheme();
+  const isSafety = type === "safety";
+  const iconName = isSafety ? "warning" : "checkmark-circle";
+  const iconColor = isSafety ? ACCENT : "#22C55E";
+  const iconBg = isSafety ? "rgba(232,112,26,0.12)" : "rgba(34,197,94,0.12)";
+  const title = isSafety ? g(SUCCESS_STRINGS.safetyTitle, lang) : g(SUCCESS_STRINGS.bugTitle, lang);
+  const body  = isSafety ? g(SUCCESS_STRINGS.safetyBody, lang)  : g(SUCCESS_STRINGS.bugBody, lang);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={modal.overlay}>
+        <View style={[modal.card, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
+          <View style={[modal.iconCircle, { backgroundColor: iconBg }]}>
+            <Ionicons name={iconName as any} size={40} color={iconColor} />
+          </View>
+          <Text style={[modal.title, { color: c.text }]}>{title}</Text>
+          <Text style={[modal.body, { color: c.textSecondary }]}>{body}</Text>
+          <Pressable onPress={onClose} style={modal.btn}>
+            <Text style={modal.btnText}>{g(SUCCESS_STRINGS.gotIt, lang)}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const modal = StyleSheet.create({
+  overlay:    { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", padding: 24 },
+  card:       { width: "100%", borderRadius: 24, padding: 28, alignItems: "center", gap: 14, borderWidth: 1 },
+  iconCircle: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  title:      { fontSize: 22, fontFamily: "Inter_700Bold", textAlign: "center" },
+  body:       { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22 },
+  btn:        { marginTop: 8, backgroundColor: ACCENT, paddingVertical: 14, paddingHorizontal: 40, borderRadius: 14 },
+  btnText:    { fontSize: 16, fontFamily: "Inter_700Bold", color: "#FFF" },
+});
+
+type ViewName = "main" | "bug" | "feature" | "safety" | "faq" | "contact";
 
 export default function SupportScreen() {
   const { c } = useTheme();
@@ -44,7 +119,7 @@ export default function SupportScreen() {
   const tier = settings.subscription;
   const rt = RESPONSE_TIMES[tier] ?? RESPONSE_TIMES.free;
 
-  const [view, setView] = useState<View>("main");
+  const [view, setView] = useState<ViewName>("main");
 
   const handleRate = async () => {
     Haptics.selectionAsync();
@@ -52,19 +127,13 @@ export default function SupportScreen() {
     await Linking.openURL(url);
   };
 
-  const handleContact = async () => {
-    Haptics.selectionAsync();
-    const subject = encodeURIComponent("MotoGuard Support Request");
-    await Linking.openURL(`mailto:${SUPPORT_EMAILS.general}?subject=${subject}`);
-  };
-
   const MENU = [
-    { id: "bug", icon: "🐛", color: ACCENT, title: s.bugTitle, subtitle: s.bugSubtitle, onPress: () => setView("bug") },
-    { id: "feature", icon: "💡", color: "#F59E0B", title: s.featureTitle, subtitle: s.featureSubtitle, onPress: () => setView("feature") },
-    { id: "safety", icon: "🚨", color: "#EF4444", title: s.safetyTitle, subtitle: s.safetySubtitle, onPress: () => setView("safety"), badge: "PRIORITY" },
-    { id: "faq", icon: "📖", color: "#3B82F6", title: s.faqTitle, subtitle: s.faqSubtitle, onPress: () => setView("faq") },
-    { id: "rate", icon: "⭐", color: "#F59E0B", title: s.rateTitle, subtitle: s.rateSubtitle, onPress: handleRate },
-    { id: "contact", icon: "📧", color: "#8B5CF6", title: s.contactTitle, subtitle: s.contactSubtitle, onPress: handleContact },
+    { id: "bug",     icon: "🐛", color: ACCENT,     title: s.bugTitle,     subtitle: s.bugSubtitle,     onPress: () => setView("bug") },
+    { id: "feature", icon: "💡", color: "#F59E0B",  title: s.featureTitle, subtitle: s.featureSubtitle, onPress: () => setView("feature") },
+    { id: "safety",  icon: "🚨", color: "#EF4444",  title: s.safetyTitle,  subtitle: s.safetySubtitle,  onPress: () => setView("safety"), badge: "PRIORITY" },
+    { id: "faq",     icon: "📖", color: "#3B82F6",  title: s.faqTitle,     subtitle: s.faqSubtitle,     onPress: () => setView("faq") },
+    { id: "rate",    icon: "⭐", color: "#F59E0B",  title: s.rateTitle,    subtitle: s.rateSubtitle,    onPress: handleRate },
+    { id: "contact", icon: "📧", color: "#8B5CF6",  title: s.contactTitle, subtitle: s.contactSubtitle, onPress: () => setView("contact") },
   ];
 
   const renderHeader = (title: string) => (
@@ -77,10 +146,11 @@ export default function SupportScreen() {
     </View>
   );
 
-  if (view === "bug") return <BugReportView c={c} s={s} lang={lang} tier={tier} renderHeader={renderHeader} insets={insets} />;
+  if (view === "bug")     return <BugReportView     c={c} s={s} lang={lang} tier={tier} renderHeader={renderHeader} insets={insets} />;
   if (view === "feature") return <FeatureRequestView c={c} s={s} lang={lang} tier={tier} renderHeader={renderHeader} insets={insets} />;
-  if (view === "safety") return <SafetyIssueView c={c} s={s} lang={lang} tier={tier} renderHeader={renderHeader} insets={insets} />;
-  if (view === "faq") return <FAQView c={c} s={s} lang={lang} renderHeader={renderHeader} insets={insets} />;
+  if (view === "safety")  return <SafetyIssueView   c={c} s={s} lang={lang} tier={tier} renderHeader={renderHeader} insets={insets} />;
+  if (view === "faq")     return <FAQView            c={c} s={s} lang={lang}             renderHeader={renderHeader} insets={insets} />;
+  if (view === "contact") return <ContactView        c={c} s={s} lang={lang}             renderHeader={renderHeader} insets={insets} />;
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
@@ -142,19 +212,25 @@ function BugReportView({ c, s, lang, tier, renderHeader, insets }: any) {
   const [description, setDescription] = useState("");
   const [when, setWhen] = useState("");
   const [showCatPicker, setShowCatPicker] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const sendReport = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    logSupportTicket("Bug", category, summary, description, lang, tier).catch(() => {});
-    const subject = encodeURIComponent(`[MotoGuard Bug] ${category} – v${APP_VERSION}`);
-    const body = encodeURIComponent(
-      `Category: ${category}\nSummary: ${summary}\nDescription: ${description}\nWhen: ${when}\n\n--- Automatic Info ---\nApp Version: ${APP_VERSION}\nOS: ${Platform.OS} ${Platform.Version}\nSubscription: ${tier}\nLanguage: ${lang}`
-    );
-    await Linking.openURL(`mailto:${SUPPORT_EMAILS.general}?subject=${subject}&body=${body}`);
+    await logSupportTicket("Bug", category, summary, description, lang, tier);
+    setShowSuccess(true);
+  };
+
+  const handleClose = () => {
+    setShowSuccess(false);
+    setCategory(categories[0]);
+    setSummary("");
+    setDescription("");
+    setWhen("");
   };
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
+      <SuccessModal visible={showSuccess} type="bug" lang={lang} onClose={handleClose} />
       {renderHeader(s.bugTitle)}
       <ScrollView contentContainerStyle={[styles.formContent, { paddingBottom: insets.bottom + 24 }]}>
         <FormLabel c={c} label={s.bugCategory} />
@@ -210,11 +286,8 @@ function BugReportView({ c, s, lang, tier, renderHeader, insets }: any) {
           onChangeText={setWhen}
         />
 
-        <Pressable
-          onPress={sendReport}
-          style={[styles.sendBtn, { backgroundColor: ACCENT }]}
-        >
-          <Ionicons name="mail" size={18} color="#FFF" />
+        <Pressable onPress={sendReport} style={[styles.sendBtn, { backgroundColor: ACCENT }]}>
+          <Ionicons name="paper-plane" size={18} color="#FFF" />
           <Text style={styles.sendBtnText}>{s.bugSend}</Text>
         </Pressable>
       </ScrollView>
@@ -228,18 +301,22 @@ function SafetyIssueView({ c, s, lang, tier, renderHeader, insets }: any) {
   const [description, setDescription] = useState("");
   const [when, setWhen] = useState("");
   const [showPicker, setShowPicker] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const sendReport = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    logSupportTicket("Safety", issueType, "", description, lang, tier).catch(() => {});
-    const subject = encodeURIComponent(`[SAFETY CRITICAL] ${issueType} – v${APP_VERSION}`);
-    const body = encodeURIComponent(
-      `SAFETY ISSUE REPORT – PRIORITY\n\nIssue Type: ${issueType}\nWhen: ${when}\nDescription: ${description}\n\n--- Automatic Info ---\nApp Version: ${APP_VERSION}\nOS: ${Platform.OS} ${Platform.Version}\nSubscription: ${tier}\nLanguage: ${lang}`
-    );
-    await Linking.openURL(`mailto:${SUPPORT_EMAILS.safety}?subject=${subject}&body=${body}`);
+    await logSupportTicket("Safety", issueType, "", description, lang, tier);
+    setShowSuccess(true);
   };
 
-  const warningText = {
+  const handleClose = () => {
+    setShowSuccess(false);
+    setIssueType(issueTypes[0]);
+    setDescription("");
+    setWhen("");
+  };
+
+  const warningText: Record<string, string> = {
     hu: "⚠️ Ez az opció kizárólag az app biztonsági funkcióival kapcsolatos kritikus hibák bejelentésére szolgál. Valódi vészhelyzetben hívd a 112-t.",
     en: "⚠️ This option is exclusively for reporting critical bugs related to the app's safety functions (accident detection, emergency alerts). In a real emergency, call 112 or your local emergency number.",
     de: "⚠️ Diese Option dient ausschließlich zur Meldung kritischer Fehler bei den Sicherheitsfunktionen der App. Im Notfall wähle 112.",
@@ -250,11 +327,12 @@ function SafetyIssueView({ c, s, lang, tier, renderHeader, insets }: any) {
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
+      <SuccessModal visible={showSuccess} type="safety" lang={lang} onClose={handleClose} />
       {renderHeader(s.safetyTitle)}
       <ScrollView contentContainerStyle={[styles.formContent, { paddingBottom: insets.bottom + 24 }]}>
         <View style={[styles.safetyWarningBox, { backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.3)" }]}>
           <Text style={[styles.safetyWarningText, { color: "#DC2626" }]}>
-            {(warningText as any)[lang] ?? warningText.en}
+            {warningText[lang] ?? warningText.en}
           </Text>
         </View>
 
@@ -316,6 +394,7 @@ function FeatureRequestView({ c, s, lang, tier, renderHeader, insets }: any) {
     Object.fromEntries(DEFAULT_FEATURE_REQUESTS.map((f) => [f.id, f.votes]))
   );
   const [customIdea, setCustomIdea] = useState("");
+  const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem("feature_votes").then((stored) => {
@@ -342,11 +421,12 @@ function FeatureRequestView({ c, s, lang, tier, renderHeader, insets }: any) {
   const submitCustomIdea = async () => {
     if (!customIdea.trim()) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const subject = encodeURIComponent("[MotoGuard] Feature Request");
-    const body = encodeURIComponent(
-      `Feature Idea: ${customIdea}\n\n--- User Info ---\nSubscription: ${tier}\nLanguage: ${lang}\nApp Version: ${APP_VERSION}`
-    );
-    await Linking.openURL(`mailto:${SUPPORT_EMAILS.features}?subject=${subject}&body=${body}`);
+    await logSupportTicket("Feature", "Custom Idea", customIdea, "", lang, tier);
+    setShowSuccess(true);
+  };
+
+  const handleClose = () => {
+    setShowSuccess(false);
     setCustomIdea("");
   };
 
@@ -359,6 +439,7 @@ function FeatureRequestView({ c, s, lang, tier, renderHeader, insets }: any) {
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
+      <SuccessModal visible={showSuccess} type="bug" lang={lang} onClose={handleClose} />
       {renderHeader(s.featureTitle)}
       <ScrollView contentContainerStyle={[styles.formContent, { paddingBottom: insets.bottom + 24 }]} showsVerticalScrollIndicator={false}>
         {DEFAULT_FEATURE_REQUESTS.map((feature) => {
@@ -422,15 +503,55 @@ function FeatureRequestView({ c, s, lang, tier, renderHeader, insets }: any) {
             onChangeText={setCustomIdea}
             multiline
           />
-          <Pressable
-            onPress={submitCustomIdea}
-            style={[styles.sendBtn, { backgroundColor: "#F59E0B" }]}
-          >
+          <Pressable onPress={submitCustomIdea} style={[styles.sendBtn, { backgroundColor: "#F59E0B" }]}>
             <Ionicons name="bulb" size={18} color="#FFF" />
             <Text style={styles.sendBtnText}>{s.featureCustomSend}</Text>
           </Pressable>
         </View>
       </ScrollView>
+    </View>
+  );
+}
+
+function ContactView({ c, s, lang, renderHeader, insets }: any) {
+  const contactLabel: Record<string, string> = {
+    hu: "Másolja ki az email-t és küldjön üzenetet:",
+    en: "Copy the email address and send us a message:",
+    de: "Kopiere die E-Mail-Adresse und schreibe uns:",
+    es: "Copia el correo electrónico y envíanos un mensaje:",
+    it: "Copia l'indirizzo email e scrivici:",
+    pt: "Copia o email e envia-nos uma mensagem:",
+  };
+  const copyNote: Record<string, string> = {
+    hu: "Tartsd lenyomva az email-t a másoláshoz",
+    en: "Long-press the email to copy it",
+    de: "Halte die E-Mail gedrückt, um sie zu kopieren",
+    es: "Mantén pulsado el correo para copiarlo",
+    it: "Tieni premuta l'email per copiarla",
+    pt: "Mantém o email premido para copiar",
+  };
+
+  return (
+    <View style={[styles.root, { backgroundColor: c.background }]}>
+      {renderHeader(s.contactTitle)}
+      <View style={[styles.formContent, { paddingBottom: insets.bottom + 24 }]}>
+        <View style={[styles.contactCard, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
+          <View style={[styles.contactIconRow]}>
+            <View style={[styles.contactIconBg, { backgroundColor: "rgba(139,92,246,0.12)" }]}>
+              <Ionicons name="mail" size={28} color="#8B5CF6" />
+            </View>
+          </View>
+          <Text style={[styles.contactLabel, { color: c.textSecondary }]}>
+            {contactLabel[lang] ?? contactLabel.en}
+          </Text>
+          <Text selectable style={[styles.contactEmail, { color: c.text }]}>
+            {SUPPORT_EMAIL}
+          </Text>
+          <Text style={[styles.contactNote, { color: c.textTertiary }]}>
+            {copyNote[lang] ?? copyNote.en}
+          </Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -529,6 +650,12 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 11, fontFamily: "Inter_700Bold" },
   customIdeaCard: { borderRadius: 16, borderWidth: 1, padding: 16, gap: 12 },
   customIdeaTitle: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  contactCard: { borderRadius: 20, borderWidth: 1, padding: 24, alignItems: "center", gap: 14 },
+  contactIconRow: { alignItems: "center" },
+  contactIconBg: { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center" },
+  contactLabel: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center" },
+  contactEmail: { fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" },
+  contactNote: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center" },
   faqCard: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 0 },
   faqHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   faqQuestion: { fontSize: 15, fontFamily: "Inter_600SemiBold", lineHeight: 22 },
