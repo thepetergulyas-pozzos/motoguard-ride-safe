@@ -3,10 +3,10 @@ import type { Language } from "@/context/AppContext";
 export const APP_VERSION = "1.0.0";
 
 export const SUPPORT_EMAILS = {
-  general: "support@motoguard.app",
-  safety: "safety@motoguard.app",
-  features: "features@motoguard.app",
-  privacy: "privacy@motoguard.app",
+  general: "thepeter.gulyas@gmail.com",
+  safety: "thepeter.gulyas@gmail.com",
+  features: "thepeter.gulyas@gmail.com",
+  privacy: "thepeter.gulyas@gmail.com",
 };
 
 export const APP_STORE_URL = "https://apps.apple.com/app/motoguard";
