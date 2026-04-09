@@ -1,15 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  Alert,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   STRINGS,
   TIER_FEATURES,
@@ -19,6 +24,7 @@ import {
 } from "@/context/AppContext";
 import { useTheme } from "@/hooks/useTheme";
 import { PaywallModal } from "@/components/ui/PaywallModal";
+import { TERMS_OF_SERVICE, PRIVACY_POLICY, getLegalText } from "@/constants/LegalTexts";
 
 const LANGUAGES: { code: Language; label: string; flag: string }[] = [
   { code: "en", label: "English", flag: "🇬🇧" },
@@ -149,6 +155,50 @@ export default function ProfileScreen() {
 
   const [showPaywall, setShowPaywall] = useState(false);
   const [showLangPicker, setShowLangPicker] = useState(false);
+  const [legalModal, setLegalModal] = useState<"terms" | "privacy" | null>(null);
+
+  const handleExportData = async () => {
+    try {
+      const export_data = {
+        exportedAt: new Date().toISOString(),
+        rides: settings.rideLogs,
+        emergencyContacts: settings.emergencyContacts,
+        language: settings.language,
+        subscription: settings.subscription,
+      };
+      await Share.share({
+        message: JSON.stringify(export_data, null, 2),
+        title: "MotoGuard Data Export",
+      });
+    } catch {
+      Alert.alert("Export Failed", "Unable to export data. Please try again.");
+    }
+  };
+
+  const handleDeleteAllData = () => {
+    Alert.alert(
+      t.deleteDataTitle,
+      t.deleteDataMsg,
+      [
+        { text: t.cancel ?? "Cancel", style: "cancel" },
+        {
+          text: t.deleteEverythingBtn,
+          style: "destructive",
+          onPress: async () => {
+            await AsyncStorage.clear();
+            updateSettings({
+              rideLogs: [],
+              emergencyContacts: [],
+              onboardingComplete: false,
+              legalAccepted: false,
+              legalAcceptedVersion: "",
+            });
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ]
+    );
+  };
 
   const handleLangSelect = (lang: Language) => {
     if (!features.multilang && lang !== "en") {
@@ -265,15 +315,79 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* Privacy & Legal */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionLabel, { color: c.textSecondary }]}>{t.sectionPrivacyLegal}</Text>
+        <View style={styles.privacyInfoRow}>
+          <View style={[styles.privacyInfoCard, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
+            <Ionicons name="phone-portrait" size={20} color={c.tint} />
+            <Text style={[styles.privacyInfoTitle, { color: c.text }]}>{t.onDeviceTitle}</Text>
+            <Text style={[styles.privacyInfoDesc, { color: c.textSecondary }]}>{t.onDeviceDesc}</Text>
+          </View>
+          <View style={[styles.privacyInfoCard, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
+            <Ionicons name="eye-off" size={20} color={c.tint} />
+            <Text style={[styles.privacyInfoTitle, { color: c.text }]}>{t.noTrackingTitle}</Text>
+            <Text style={[styles.privacyInfoDesc, { color: c.textSecondary }]}>{t.noTrackingDesc}</Text>
+          </View>
+        </View>
+        <View style={[styles.group, { borderColor: c.cardBorder }]}>
+          <SettingsRow
+            icon="cloud-download"
+            label={t.exportData}
+            value={t.exportDataDesc}
+            onPress={handleExportData}
+          />
+          <View style={[styles.separator, { backgroundColor: c.separator }]} />
+          <SettingsRow
+            icon="document-text"
+            label={t.termsOfService}
+            onPress={() => setLegalModal("terms")}
+          />
+          <View style={[styles.separator, { backgroundColor: c.separator }]} />
+          <SettingsRow
+            icon="shield-checkmark"
+            label={t.privacyLabel ?? "Privacy Policy"}
+            onPress={() => setLegalModal("privacy")}
+          />
+          <View style={[styles.separator, { backgroundColor: c.separator }]} />
+          <SettingsRow
+            icon="trash"
+            label={t.deleteAllData}
+            danger
+            onPress={handleDeleteAllData}
+          />
+        </View>
+        <Text style={[styles.legalVersionNote, { color: c.textTertiary }]}>
+          {t.legalVersion} {TERMS_OF_SERVICE.version} · {TERMS_OF_SERVICE.lastUpdated}
+        </Text>
+      </View>
+
+      {/* Support */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionLabel, { color: c.textSecondary }]}>{t.supportLabel.toUpperCase()}</Text>
+        <Pressable
+          onPress={() => { Haptics.selectionAsync(); router.push("/support"); }}
+          style={({ pressed }) => [
+            styles.group,
+            { borderColor: c.cardBorder, flexDirection: "row", alignItems: "center", padding: 16, opacity: pressed ? 0.8 : 1 },
+          ]}
+        >
+          <View style={[styles.rowIcon, { backgroundColor: "rgba(232,112,26,0.12)" }]}>
+            <Ionicons name="help-buoy" size={18} color="#E8701A" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.rowLabel, { color: c.text }]}>{t.supportLabel}</Text>
+            <Text style={[styles.rowValue, { color: c.textSecondary }]}>Bug reports · FAQ · Feature requests</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={c.textTertiary} />
+        </Pressable>
+      </View>
+
       {/* About */}
       <View style={styles.section}>
         <Text style={[styles.sectionLabel, { color: c.textSecondary }]}>{t.sectionAbout}</Text>
         <View style={[styles.group, { borderColor: c.cardBorder }]}>
           <SettingsRow icon="information-circle" label={t.versionLabel} value="1.0.0" />
-          <View style={[styles.separator, { backgroundColor: c.separator }]} />
-          <SettingsRow icon="document-text" label={t.privacyLabel} />
-          <View style={[styles.separator, { backgroundColor: c.separator }]} />
-          <SettingsRow icon="mail" label={t.supportLabel} value="support@motoguard.app" />
         </View>
       </View>
 
@@ -308,6 +422,31 @@ export default function ProfileScreen() {
       )}
 
       <PaywallModal visible={showPaywall} onClose={() => setShowPaywall(false)} />
+
+      {legalModal && (
+        <Modal visible animationType="slide" presentationStyle="pageSheet">
+          <View style={[styles.modalRoot, { backgroundColor: c.background }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: c.separator }]}>
+              <Text style={[styles.modalTitle, { color: c.text }]}>
+                {legalModal === "terms" ? t.termsOfService : t.privacyLabel ?? "Privacy Policy"}
+              </Text>
+              <Pressable
+                onPress={() => setLegalModal(null)}
+                style={[styles.modalClose, { backgroundColor: c.backgroundTertiary }]}
+              >
+                <Text style={[styles.modalCloseText, { color: c.text }]}>{t.closeBtn}</Text>
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.modalContent}>
+              <Text style={[styles.legalText, { color: c.textSecondary }]}>
+                {legalModal === "terms"
+                  ? getLegalText(TERMS_OF_SERVICE, settings.language)
+                  : getLegalText(PRIVACY_POLICY, settings.language)}
+              </Text>
+            </ScrollView>
+          </View>
+        </Modal>
+      )}
     </ScrollView>
   );
 }
@@ -353,4 +492,16 @@ const styles = StyleSheet.create({
   langOption: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 10, borderRadius: 10 },
   langFlag: { fontSize: 22 },
   langLabel: { flex: 1, fontSize: 16, fontFamily: "Inter_500Medium" },
+  privacyInfoRow: { flexDirection: "row", gap: 10 },
+  privacyInfoCard: { flex: 1, borderRadius: 14, borderWidth: 1, padding: 12, gap: 6 },
+  privacyInfoTitle: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  privacyInfoDesc: { fontSize: 11, fontFamily: "Inter_400Regular", lineHeight: 15 },
+  legalVersionNote: { fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "center", paddingTop: 4 },
+  modalRoot: { flex: 1 },
+  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1 },
+  modalTitle: { fontSize: 17, fontFamily: "Inter_700Bold", flex: 1 },
+  modalClose: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8 },
+  modalCloseText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  modalContent: { padding: 20 },
+  legalText: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 21 },
 });
