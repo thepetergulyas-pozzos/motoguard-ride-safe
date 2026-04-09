@@ -10,6 +10,7 @@ import {
   Text,
   TextInput,
   UIManager,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -32,6 +33,7 @@ if (Platform.OS === "android") {
 export default function MapScreen() {
   const { c, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
   const { settings, accidentActive } = useApp();
   const t = STRINGS[settings.language];
   const features = TIER_FEATURES[settings.subscription];
@@ -84,7 +86,7 @@ export default function MapScreen() {
 
   const isNavigating = nav.status === "navigating" || nav.status === "arrived";
   const navRouteCoords = nav.route?.coordinates ?? null;
-  const panelBottom = TAB_BAR_HEIGHT + insets.bottom;
+  const panelBottom = Math.round(height * 0.48);
   const topOffset = insets.top + (Platform.OS === "web" ? 67 : 0);
 
   return (
